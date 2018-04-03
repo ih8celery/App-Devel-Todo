@@ -4,16 +4,5 @@
 # author: Adam Marshall
 # brief: manage project objectives
 
-=pod
-
-=cut
-
-use strict;
-use warnings;
-
-use feature qw/say/;
-
-use lib "$ENV{HOME}/proj/todo-app/";
 use App::Devel::Todo;
-
 run();
