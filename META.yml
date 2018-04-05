@@ -1,0 +1,22 @@
+---
+name: 'App-Devel-Todo'
+abstract: 'Manage your project todo list from the command-line'
+author:
+  - 'Adam Marshall'
+build_requires:
+  Module::Build: '0'
+configure_requires:
+  Module::Build: '0'
+requires:
+  Getopt::Long: '2.5'
+  Cwd: '0'
+  YAML::XS: '0'
+  Const::Fast: '0'
+  File::Basename: '0'
+  Carp: '0'
+dynamic_config: 1
+resources:
+  repository: https://github.com/ih8celery/App-Devel-Todo.git
+license: 'MIT'
+version: '0.05'
+

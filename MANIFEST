@@ -1,0 +1,6 @@
+MANIFEST               listing of project files
+README.md              introduction to the project
+META.yml               general project information
+Build.PL               build instructions
+lib/App/Devel/Todo.pm  project definitions
+bin/todo               project executable
