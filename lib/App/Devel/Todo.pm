@@ -20,7 +20,7 @@ BEGIN {
 
 use feature qw/say/;
 
-use Data::Dumper;
+use Data::Dumper; #TEMP
 use Const::Fast;
 use Getopt::Long;
 use Cwd qw/cwd/;
@@ -38,8 +38,8 @@ package Action {
   const our $SHOW   => 3; # print information about todo/s
 }
 
-# lists defined in a todos file
-package List {
+# stati defined in a todos file
+package Status {
   use Const::Fast;
 
   const our $TODO => "do";
@@ -47,30 +47,48 @@ package List {
   const our $WANT => "want";
 }
 
+# config variables always relevant to the program
 our $VERSION      = '0.01';
-our $CWD          = cwd;
 our $CONFIG_FILE  = "$ENV{HOME}/.todorc"; # location of global configuration
-our $TODO_DIR     = $CWD; # where the search for todo files begins
-our $ACTION       = $Action::CREATE; # what will be done with the todos
-our $MOVE_SOURCE  = '';
+our $TODO_DIR     = cwd; # where the search for todo files begins
+our $TODO_FILE    = '';
+
+# the general action which will be taken by the program
+our $ACTION = $Action::CREATE;
+
+# default attributes
+our $DEFAULT_STATUS      = $Status::TODO;
+our $DEFAULT_PRIORITY    = 0;
+our $DEFAULT_DESCRIPTION = '';
+
+# attributes given on the command line
+our $STATUS      = '';
+our $PRIORITY    = '';
+our $DESCRIPTION = '';
+
+# before creating a new todo, an old one that matches may be moved
 our $MOVE_ENABLED = 1;
-our $FOCUSED_LIST = $List::TODO; # which part of todo list will be accessed
+
+# declare command-line options
 our %OPTS = (
-      'help|h'    => \&HELP,
-      'version|v' => \&VERSION,
-      'local|g'   => sub { $TODO_DIR = $CWD },
-      'global|g'  => sub { $TODO_DIR = $ENV{HOME} },
-      'delete|d'  => sub { $ACTION   = $Action::DELETE; },
-      'create|c'  => sub { $ACTION   = $Action::CREATE; },
-      'edit|e'    => sub { $ACTION   = $Action::EDIT; },
-      'show|s'    => sub { $ACTION   = $Action::SHOW; },
-      'C|create-no-move' => sub { $ACTION = $Action::CREATE; $MOVE_ENABLED = 0; }
+  'help|h'              => \&_help,
+  'version|v'           => \&_version,
+  'delete|D'            => sub { $ACTION   = $Action::DELETE; },
+  'create|C'            => sub { $ACTION   = $Action::CREATE; },
+  'edit|E'              => sub { $ACTION   = $Action::EDIT; },
+  'show|S'              => sub { $ACTION   = $Action::SHOW; },
+  'create-no-move|N'    => sub { $ACTION = $Action::CREATE; $MOVE_ENABLED = 0; },
+  'config-file|f=s'     => \$CONFIG_FILE,
+  'todo-file|t=s'       => \$TODO_FILE,
+  'use-status|s=s'      => \$STATUS,
+  'use-priority|p=s'    => \$PRIORITY,
+  'use-description|d=s' => \$DESCRIPTION
 );
 
 Getopt::Long::Configure('no_ignore_case');
 
 # print a help message appropriate to the situation and exit
-sub HELP {
+sub _help {
   my $h_type = shift || 's';
   my $h_general_help = <<EOM;
 -h|--help            print help
@@ -88,9 +106,9 @@ sub HELP {
 EOM
 
   my %h_messages = (
-    $List::TODO => "selects your todo list",
-    $List::DONE => "selects your list of finished tasks",
-    $List::WANT => "selects your list of goals"
+    $Status::TODO => "selects your todo list",
+    $Status::DONE => "selects your list of finished tasks",
+    $Status::WANT => "selects your list of goals"
   );
   
   if ($h_type eq 'a') {
@@ -99,25 +117,25 @@ EOM
   }
   else {
     # help with subcommand
-    say $h_messages{$FOCUSED_LIST};
+    say $h_messages{$DEFAULT_STATUS};
   }
 
   exit 0;
 }
 
 # print the application name and version number and exit
-sub VERSION {
+sub _version {
   say "todo $VERSION";
 
   exit 0;
 }
 
 # auxiliary function to collect the subcommand
-sub process_subcommand {
+sub get_subcommand {
   my $ps_num_args = scalar @ARGV;
 
   if ($ps_num_args == 0) {
-    HELP('a');
+    _help('a');
   }
   else {
     # expect a subcommand or global option
@@ -125,16 +143,16 @@ sub process_subcommand {
       VERSION();
     }
     elsif ($ARGV[0] eq '-h' || $ARGV[0] eq '--help') {
-      HELP('a');
+      _help('a');
     }
-    elsif ($ARGV[0] eq $List::TODO) {
-      $FOCUSED_LIST = $List::TODO;
+    elsif ($ARGV[0] eq $Status::TODO) {
+      $DEFAULT_STATUS = $Status::TODO;
     }
-    elsif ($ARGV[0] eq $List::DONE) {
-      $FOCUSED_LIST = $List::DONE;
+    elsif ($ARGV[0] eq $Status::DONE) {
+      $DEFAULT_STATUS = $Status::DONE;
     }
-    elsif ($ARGV[0] eq $List::WANT) {
-      $FOCUSED_LIST = $List::WANT;
+    elsif ($ARGV[0] eq $Status::WANT) {
+      $DEFAULT_STATUS = $Status::WANT;
     }
     else {
       croak "expected subcommand or global option";
@@ -149,7 +167,7 @@ sub process_subcommand {
 }
 
 # process non-option arguments into a list of keys and values
-sub process_args {
+sub get_args {
   my @pa_out  = ();
 
   my $pa_key   = "";
@@ -210,17 +228,6 @@ sub process_args {
   return @pa_out;
 }
 
-# return the name of the list which should be used for moving
-sub get_move_source {
-  return $MOVE_SOURCE if ($MOVE_SOURCE ne '');
-
-  return $List::WANT if ($FOCUSED_LIST eq $List::TODO);
-
-  return $List::TODO if ($FOCUSED_LIST eq $List::WANT);
-
-  return $List::TODO if ($FOCUSED_LIST eq $List::DONE);
-}
-
 # load the global configuration file settings
 sub configure_app {
   return 1;
@@ -256,7 +263,7 @@ sub find_project {
   return $fp_file;
 }
 
-sub _item_has_status {
+sub _has_the_status {
   my ($item, $status) = @_;
 
   if (ref($item) eq "HASH") {
@@ -264,12 +271,25 @@ sub _item_has_status {
       return ($status eq $item->{status});
     }
     else {
-      return ($FOCUSED_LIST eq $status);
+      return ($DEFAULT_STATUS eq $status);
     }
   }
   else {
     return ($status eq $item);
   }
+}
+
+sub _has_key {
+  my ($project, $key) = @_;
+
+  return (exists $am_start->{contents}{$key});
+}
+
+sub _has_contents {
+  my $val = shift;
+
+  return (ref($val) eq 'HASH' && exists $val->{contents}
+    && ref($val->{contents}) eq 'HASH');
 }
 
 sub create_stuff {
@@ -278,91 +298,139 @@ sub create_stuff {
   return 0;
 }
 
+sub _apply_to_matches {
+  my ($am_sub, $am_start, $am_key) = @_;
+
+  if (ref($am_key) eq 'ARRAY') {
+    return 0 unless _has_key($am_start, $am_key->[0]);
+
+    my $am_count   = 0;
+    my $am_sublist = $am_start->{contents}{ $am_key->[0] };
+
+    if (_has_contents($am_sublist)) {
+      foreach ($am_key->[1]) {
+        $am_count += _apply_to_matches($am_sub, $am_sublist, $_);
+      }
+
+      return $am_count;
+    }
+    else {
+      return 0;
+    }
+  }
+  else {
+    return 0 unless _has_key($am_start, $am_key);
+
+    &{ $am_sub }($am_start, $am_key);
+  }
+
+  return 1;
+}
+
 sub edit_stuff {
-  my ($file, $contents, $args) = @_;
+  my ($es_file, $es_project, $es_args) = @_;
+  
+  unless (_has_contents($es_project)) {
+    say "value of contents in list or sublist MUST be hash";
+    exit 1;
+  }
+
+  foreach (@$es_args) {
+    _apply_to_matches(\&_es_set_attrs, $es_project, $_);
+  }
+
+  DumpFile($es_file, $es_project);
 
   return 0;
+}
+
+sub _es_set_attrs {
+  say "setting attrs ..."; #ASSERT
+  my ($list, $key) = @_;
+
+  my $contents = $list->{contents};
+
+  return if ($STATUS eq '' && $PRIORITY eq '' && $DESCRIPTION eq '');
+
+  my $replacement = {};
+
+  if (ref($contents->{$key}) eq "HASH") {
+    $replacement = $contents->{$key};
+  }
+  
+  unless ($STATUS eq '') {
+    $replacement->{status} = $STATUS;
+  }
+
+  unless ($PRIORITY eq '') {
+    $replacement->{priority} = $PRIORITY;
+  }
+
+  unless ($DESCRIPTION eq '') {
+    $replacement->{description} = $DESCRIPTION;
+  }
+
+  $contents->{$key} = $replacement;
 }
 
 sub show_stuff {
   my ($ss_project, $ss_args) = @_;
 
-  unless (exists $ss_project->{contents}
-      and ref($ss_project->{contents}) eq "HASH") {
-
+  unless (_has_contents($ss_project)) {
     say "error: nothing to show";
 
     return 1;
   }
 
-  # try to print args that name sublists
   if (scalar @$ss_args) {
-    my $ss_contents = $ss_project->{contents};
-
     foreach (@$ss_args) {
+      # ignore arrayref args
       if (ref($_) eq '') {
-        if (exists $ss_contents->{ $_ } && ref($ss_contents->{ $_ }) eq "HASH") {
-          ss_dump_stuff($ss_contents->{ $_ }, $_, 0);
-        }
+        _apply_to_matches(\&_ss_dumper, $ss_project, $_);
       }
     }
   }
-  # just print everything that is not too deeply nested
   else {
-    ss_dump_stuff($ss_project, "", 0);
+    _ss_dumper($ss_project, '');
   }
 
   return 0;
 }
 
-# print contents of 'list' if have the right status
-sub ss_dump_stuff {
-  my $stuff = shift;
-  my $head  = shift;
-  my $shift = shift || 0;
+# print contents of 'list' if items have the right status
+sub _ss_dumper {
+  my $project = shift;
+  my $key     = shift;
 
-  my $has_printed_head = 0;
+  my $has_printed_key = 0;
+  $has_printed_key    = 1 if $key eq '';
 
-  $has_printed_head = 1 if ($head eq "");
-
-  return if ($shift > 1);
-
-  while ((my ($key, $value) = each %{ $stuff->{contents} })) {
-    my $reftype = ref $value;
-
-    if ($reftype eq "") {
-      if ($value eq $FOCUSED_LIST) {
-        unless ($has_printed_head) {
-          say ' ' x ($shift - 1), $head, ':';
-          $has_printed_head = 1;
-        }
-
-        say ' ' x $shift, $key;
+  if ($key eq '') {
+    # print each item, excluding sublists, if it has the right status
+    # apply the same rule to the ITEMS of a sublist
+    while ((my ($k, $v) = each %{ $project->{contents} })) {
+      if (_has_contents($v)) {
+        _ss_dumper($project, $k);
+      }
+      elsif (_has_the_status($v, $DEFAULT_STATUS)) {
+        say $k; # TODO show more information about todo, i.e. attributes
       }
     }
-    elsif ($reftype eq "HASH" and exists $value->{contents}) {
-      ss_dump_stuff($value, $key, $shift + 1);
-    }
-    elsif ($reftype eq "HASH") {
-      if (exists $value->{status}) {
-        if ($value->{status} eq $FOCUSED_LIST) {
-          unless ($has_printed_head) {
-            say ' ' x ($shift - 1), $head, ':';
-            $has_printed_head = 1;
-          }
+  }
+  else { 
+    my $sublist = $project->{contents}{$key};
 
-          say ' ' x $shift, $key;
-        }
-      }
-      else {
-        if ($FOCUSED_LIST eq $List::TODO) {
-          unless ($has_printed_head) {
-            say ' ' x ($shift - 1), $head, ':';
-            $has_printed_head = 1;
-          }
+    return unless _has_contents($sublist);
 
-          say $key;
+    while ((my ($k, $v) = each %{ $sublist->{contents} })) {
+      if (_has_the_status($v, $DEFAULT_STATUS)) {
+        unless ($has_printed_key) {
+          say $key, ':';
+
+          $has_printed_key = 1;
         }
+
+        say '  ', $k; # TODO show more information about todo, i.e. attributes
       }
     }
   }
@@ -371,53 +439,26 @@ sub ss_dump_stuff {
 sub delete_stuff {
   my ($ds_file, $ds_data, $ds_args) = @_;
 
+  unless (_has_contents($ds_data)) {
+    say "nothing to delete";
+    exit 1;
+  }
+
   my $ds_contents = $ds_data->{contents};
 
   if (scalar @$ds_args) {
     foreach (@$ds_args) {
-      if (ref($_) eq 'ARRAY') {
-        unless (exists($ds_contents->{ $_->[0] })
-              && ref($ds_contents->{ $_->[0] }) eq "HASH") {
-        
-          next;
-        }
-
-        my $ds_sublist = $ds_contents->{ $_->[0] };
-        if (exists $ds_sublist->{contents}) {
-          $ds_sublist = $ds_sublist->{contents};
-        }
-        else {
-          next;
-        }
-
-        for (my $i = 0; $i < scalar @{$_->[1]}; $i++) {
-          if (exists $ds_sublist->{ $_->[1][$i] }) {
-            if (_item_has_status($ds_sublist->{ $_->[1][$i] }, $FOCUSED_LIST)) {
-              delete $ds_sublist->{ $_->[1][$i] };
-            }
-          }
-        }
-      }
-      else {
-        if (exists($ds_contents->{ $_ })
-          && _item_has_status($ds_contents->{ $_ }, $FOCUSED_LIST)) {
-
-          delete $ds_contents->{ $_ };
-        }
-      }
+      _apply_to_matches(\&_ds_deleter, $ds_data, $_);
     }
   }
   else {
-    say "no args"; #ASSERT
-    while ((my ($key, $value) = each %$ds_contents)) {
-      if (_item_has_status($value, $FOCUSED_LIST)) {
+    for my $key (keys %{$ds_contents}) {
+      if (_has_the_status($ds_contents->{$key}, $DEFAULT_STATUS)) {
         delete $ds_contents->{$key};
       }
-      elsif (ref($value) eq 'HASH' && exists $value->{contents}) {
-        while ((my ($subkey, $subvalue) = each %{ $value->{contents} })) {
-          if (_item_has_status($subvalue, $FOCUSED_LIST)) {
-            delete $value->{contents}{$key};
-          }
+      elsif (_has_contents($ds_contents->{$key})) {
+        while ((my ($subkey, $subvalue) = each %{ $ds_contents->{$key}{contents} })) {
+          _ds_deleter($ds_contents->{$key}, $subkey);
         }
       }
     }
@@ -428,35 +469,44 @@ sub delete_stuff {
   return 0;
 }
 
+sub _ds_deleter {
+  my ($project, $key) = @_;
+
+  if (_has_the_status($project->{contents}{$key}, $DEFAULT_STATUS)) {
+    delete $project->{contents}{ $key };
+  }
+}
+
 # main application logic
+# TODO maybe move this definition to bin script?
 sub run {
   configure_app($CONFIG_FILE);
   
-  process_subcommand();
+  get_subcommand();
 
   if (! GetOptions(%OPTS)) {
     exit 1;
   }
 
-  if ($MOVE_SOURCE eq '') {
-    if ($FOCUSED_LIST eq $List::WANT) {
-      $MOVE_SOURCE = $List::TODO;
-    }
-    elsif ($FOCUSED_LIST eq $List::TODO) {
-      $MOVE_SOURCE = $List::WANT;
-    }
-    else {
-      $MOVE_SOURCE = $List::TODO;
-    }
-  }
-
-  my @r_args = process_args();
+  my @r_args = get_args();
 
   my $r_project_file = find_project();
 
   my $r_todos = LoadFile($r_project_file);
 
   if ($ACTION == $Action::CREATE) {
+    if ($STATUS eq '') {
+      if ($DEFAULT_STATUS eq $Status::WANT) {
+        $STATUS = $Status::TODO;
+      }
+      elsif ($DEFAULT_STATUS eq $Status::TODO) {
+        $STATUS = $Status::WANT;
+      }
+      else {
+        $STATUS = $Status::TODO;
+      }
+    }
+
     exit create_stuff($r_project_file, $r_todos, \@r_args);
   }
   elsif ($ACTION == $Action::SHOW) {
