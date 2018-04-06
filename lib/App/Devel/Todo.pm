@@ -20,12 +20,13 @@ BEGIN {
 
 use feature qw/say/;
 
+use Data::Dumper;
 use Const::Fast;
 use Getopt::Long;
 use Cwd qw/cwd/;
 use File::Basename;
 use Carp;
-use YAML::XS qw/LoadFile Dump/;
+use YAML::XS qw/LoadFile DumpFile Dump/;
 
 # actions the app may take upon the selected todos
 package Action {
@@ -63,11 +64,10 @@ our %OPTS = (
       'create|c'  => sub { $ACTION   = $Action::CREATE; },
       'edit|e'    => sub { $ACTION   = $Action::EDIT; },
       'show|s'    => sub { $ACTION   = $Action::SHOW; },
-      'W|move-from-want' => sub { $MOVE_SOURCE = $List::WANT; },
-      'F|move-from-done' => sub { $MOVE_SOURCE = $List::DONE; },
-      'D|move-from-todo' => sub { $MOVE_SOURCE = $List::TODO; },
       'C|create-no-move' => sub { $ACTION = $Action::CREATE; $MOVE_ENABLED = 0; }
 );
+
+Getopt::Long::Configure('no_ignore_case');
 
 # print a help message appropriate to the situation and exit
 sub HELP {
@@ -191,13 +191,16 @@ sub process_args {
         push @pa_out, $1;
       }
       else {
+        $pa_count++;
+
         push @$pa_blob, $1;
       }
 
       next;
     }
 
-    croak "arg $_ is invalid";
+    say "arg $_ is invalid";
+    exit 1;
   }
 
   if ($pa_count) {
@@ -251,6 +254,22 @@ sub find_project {
   croak "no project file found" unless -f $fp_file;
 
   return $fp_file;
+}
+
+sub _item_has_status {
+  my ($item, $status) = @_;
+
+  if (ref($item) eq "HASH") {
+    if (exists $item->{status}) {
+      return ($status eq $item->{status});
+    }
+    else {
+      return ($FOCUSED_LIST eq $status);
+    }
+  }
+  else {
+    return ($status eq $item);
+  }
 }
 
 sub create_stuff {
@@ -350,7 +369,61 @@ sub ss_dump_stuff {
 }
 
 sub delete_stuff {
-  my ($file, $contents, $args) = @_;
+  my ($ds_file, $ds_data, $ds_args) = @_;
+
+  my $ds_contents = $ds_data->{contents};
+
+  if (scalar @$ds_args) {
+    foreach (@$ds_args) {
+      if (ref($_) eq 'ARRAY') {
+        unless (exists($ds_contents->{ $_->[0] })
+              && ref($ds_contents->{ $_->[0] }) eq "HASH") {
+        
+          next;
+        }
+
+        my $ds_sublist = $ds_contents->{ $_->[0] };
+        if (exists $ds_sublist->{contents}) {
+          $ds_sublist = $ds_sublist->{contents};
+        }
+        else {
+          next;
+        }
+
+        for (my $i = 0; $i < scalar @{$_->[1]}; $i++) {
+          if (exists $ds_sublist->{ $_->[1][$i] }) {
+            if (_item_has_status($ds_sublist->{ $_->[1][$i] }, $FOCUSED_LIST)) {
+              delete $ds_sublist->{ $_->[1][$i] };
+            }
+          }
+        }
+      }
+      else {
+        if (exists($ds_contents->{ $_ })
+          && _item_has_status($ds_contents->{ $_ }, $FOCUSED_LIST)) {
+
+          delete $ds_contents->{ $_ };
+        }
+      }
+    }
+  }
+  else {
+    say "no args"; #ASSERT
+    while ((my ($key, $value) = each %$ds_contents)) {
+      if (_item_has_status($value, $FOCUSED_LIST)) {
+        delete $ds_contents->{$key};
+      }
+      elsif (ref($value) eq 'HASH' && exists $value->{contents}) {
+        while ((my ($subkey, $subvalue) = each %{ $value->{contents} })) {
+          if (_item_has_status($subvalue, $FOCUSED_LIST)) {
+            delete $value->{contents}{$key};
+          }
+        }
+      }
+    }
+  }
+
+  DumpFile($ds_file, $ds_data);
 
   return 0;
 }
