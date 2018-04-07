@@ -1,5 +1,3 @@
-version 0.1.0
-
 # Summary
 
 todo-app is a command-line application for managing project tasks

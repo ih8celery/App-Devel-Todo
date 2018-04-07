@@ -47,7 +47,7 @@ package Status {
 }
 
 # config variables always relevant to the program
-our $VERSION      = '0.01';
+our $VERSION      = '0.05';
 our $CONFIG_FILE  = "$ENV{HOME}/.todorc"; # location of global configuration
 our $TODO_DIR     = cwd; # where the search for todo files begins
 our $TODO_FILE    = '';
