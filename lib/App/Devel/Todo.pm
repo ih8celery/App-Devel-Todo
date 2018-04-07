@@ -12,20 +12,19 @@ BEGIN {
   use Exporter;
 
   our @ISA = qw/Exporter/;
-  our @EXPORT = qw/&run/;
-  our %EXPORT_TAGS = (
-    test => [qw/&run &configure_app &find_project/]
-  );
+  our @EXPORT = qw{
+    &configure_app &get_subcommand &get_args
+    &find_project %OPTS &create_stuff &edit_stuff
+    &show_stuff &delete_stuff
+  };
 }
 
 use feature qw/say/;
 
-use Data::Dumper; #TEMP
 use Const::Fast;
 use Getopt::Long;
 use Cwd qw/cwd/;
 use File::Basename;
-use Carp;
 use YAML::XS qw/LoadFile DumpFile Dump/;
 
 # actions the app may take upon the selected todos
@@ -140,7 +139,7 @@ sub get_subcommand {
   else {
     # expect a subcommand or global option
     if ($ARGV[0] eq '-v' || $ARGV[0] eq '--version') {
-      VERSION();
+      _version();
     }
     elsif ($ARGV[0] eq '-h' || $ARGV[0] eq '--help') {
       _help('a');
@@ -155,7 +154,8 @@ sub get_subcommand {
       $DEFAULT_STATUS = $Status::WANT;
     }
     else {
-      croak "expected subcommand or global option";
+      say "expected subcommand or global option";
+      exit 1;
     }
 
     shift @ARGV;
@@ -197,7 +197,7 @@ sub get_args {
       $pa_blob  = [];
       $pa_count = 0;
 
-      push @pa_out, [$1, $2];
+      push @pa_out, [$1, [$2] ];
 
       next;
     }
@@ -258,7 +258,10 @@ sub find_project {
     }
   }
   
-  croak "no project file found" unless -f $fp_file;
+  unless (-f $fp_file) {
+    say "no project file found";
+    exit 1;
+  }
 
   return $fp_file;
 }
@@ -282,7 +285,7 @@ sub _has_the_status {
 sub _has_key {
   my ($project, $key) = @_;
 
-  return (exists $am_start->{contents}{$key});
+  return (exists $project->{contents}{$key});
 }
 
 sub _has_contents {
@@ -293,35 +296,97 @@ sub _has_contents {
 }
 
 sub create_stuff {
-  my ($file, $contents, $args) = @_;
+  my ($cs_file, $cs_project, $cs_args) = @_;
+
+  my $cs_item = _cs_maker();
+  for (@$cs_args) {
+    if ($MOVE_ENABLED
+      && _apply_to_matches(\&_cs_mover, $cs_project, $_)) {
+
+      next;
+    }
+    elsif (ref($_) eq 'ARRAY') {
+      say "adding contents of array"; #ASSERT
+      my $cs_sublist = $cs_project->{contents}{ $_->[0] };
+
+      # make several items with identical values in a sublist
+      for my $cs_item_name (@{ $_->[1] }) {
+        $cs_sublist->{contents}{$cs_item_name} = $cs_item;
+      }
+    }
+    else {
+      say "adding a simple scalar"; #ASSERT
+      # make one item using $STATUS, $PRIORITY, $DESCRIPTION
+      $cs_project->{contents}{$_} = $cs_item;
+    }
+  }
+
+  DumpFile($cs_file, $cs_project);
 
   return 0;
 }
 
+sub _cs_mover {
+  my ($project, $key) = @_;
+
+  if (ref() eq 'HASH') {
+    $project->{contents}{$key}{status} = $DEFAULT_STATUS;
+  }
+  else {
+    $project->{contents}{$key} = $DEFAULT_STATUS;
+  }
+}
+
+sub _cs_maker {
+  my $out = {};
+
+  if ($PRIORITY eq '' && $DESCRIPTION eq '') {
+    if ($STATUS eq '') {
+      return $DEFAULT_STATUS;
+    }
+    else {
+      return $STATUS;
+    }
+  }
+  elsif ($PRIORITY eq '') {
+    $out->{description} = $DESCRIPTION unless ($DESCRIPTION eq '');
+  }
+  elsif ($DESCRIPTION eq '') {
+    $out->{priority} = $PRIORITY unless ($PRIORITY eq '');
+  }
+  else {
+    $out->{status} = $STATUS unless ($STATUS eq '');
+  }
+  
+  return $out;
+}
+
 sub _apply_to_matches {
-  my ($am_sub, $am_start, $am_key) = @_;
+  my $sub   = shift;
+  my $start = shift;
+  my $key   = shift;
 
-  if (ref($am_key) eq 'ARRAY') {
-    return 0 unless _has_key($am_start, $am_key->[0]);
+  if (ref($key) eq 'ARRAY') {
+    return 0 unless _has_key($start, $key->[0]);
 
-    my $am_count   = 0;
-    my $am_sublist = $am_start->{contents}{ $am_key->[0] };
+    my $count   = 0;
+    my $sublist = $start->{contents}{ $key->[0] };
 
-    if (_has_contents($am_sublist)) {
-      foreach ($am_key->[1]) {
-        $am_count += _apply_to_matches($am_sub, $am_sublist, $_);
+    if (_has_contents($sublist)) {
+      foreach ($key->[1]) {
+        $count += _apply_to_matches($sub, $sublist, $_);
       }
 
-      return $am_count;
+      return $count;
     }
     else {
       return 0;
     }
   }
   else {
-    return 0 unless _has_key($am_start, $am_key);
+    return 0 unless _has_key($start, $key);
 
-    &{ $am_sub }($am_start, $am_key);
+    &{ $sub }($start, $key);
   }
 
   return 1;
@@ -332,7 +397,7 @@ sub edit_stuff {
   
   unless (_has_contents($es_project)) {
     say "value of contents in list or sublist MUST be hash";
-    exit 1;
+    return 1;
   }
 
   foreach (@$es_args) {
@@ -441,11 +506,10 @@ sub delete_stuff {
 
   unless (_has_contents($ds_data)) {
     say "nothing to delete";
-    exit 1;
+    return 1;
   }
 
   my $ds_contents = $ds_data->{contents};
-
   if (scalar @$ds_args) {
     foreach (@$ds_args) {
       _apply_to_matches(\&_ds_deleter, $ds_data, $_);
@@ -495,18 +559,6 @@ sub run {
   my $r_todos = LoadFile($r_project_file);
 
   if ($ACTION == $Action::CREATE) {
-    if ($STATUS eq '') {
-      if ($DEFAULT_STATUS eq $Status::WANT) {
-        $STATUS = $Status::TODO;
-      }
-      elsif ($DEFAULT_STATUS eq $Status::TODO) {
-        $STATUS = $Status::WANT;
-      }
-      else {
-        $STATUS = $Status::TODO;
-      }
-    }
-
     exit create_stuff($r_project_file, $r_todos, \@r_args);
   }
   elsif ($ACTION == $Action::SHOW) {
