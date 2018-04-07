@@ -14,8 +14,9 @@ BEGIN {
   our @ISA = qw/Exporter/;
   our @EXPORT = qw{
     &configure_app &get_subcommand &get_args
-    &find_project %OPTS &create_stuff &edit_stuff
+    &find_project &create_stuff &edit_stuff
     &show_stuff &delete_stuff
+    %OPTS
   };
 }
 
@@ -266,6 +267,7 @@ sub find_project {
   return $fp_file;
 }
 
+# does list item have a status?
 sub _has_the_status {
   my ($item, $status) = @_;
 
@@ -282,12 +284,14 @@ sub _has_the_status {
   }
 }
 
+# does todo list have item named key?
 sub _has_key {
   my ($project, $key) = @_;
 
   return (exists $project->{contents}{$key});
 }
 
+# is scalar a todo list?
 sub _has_contents {
   my $val = shift;
 
@@ -295,6 +299,7 @@ sub _has_contents {
     && ref($val->{contents}) eq 'HASH');
 }
 
+# create an item or maybe change an existing one
 sub create_stuff {
   my ($cs_file, $cs_project, $cs_args) = @_;
 
@@ -326,6 +331,7 @@ sub create_stuff {
   return 0;
 }
 
+# passed to _apply_to_matches by create_stuff to move an item
 sub _cs_mover {
   my ($project, $key) = @_;
 
@@ -361,6 +367,7 @@ sub _cs_maker {
   return $out;
 }
 
+# call a function on all relevant items
 sub _apply_to_matches {
   my $sub   = shift;
   my $start = shift;
@@ -392,6 +399,7 @@ sub _apply_to_matches {
   return 1;
 }
 
+# change relevant items 
 sub edit_stuff {
   my ($es_file, $es_project, $es_args) = @_;
   
@@ -409,6 +417,7 @@ sub edit_stuff {
   return 0;
 }
 
+# passed to _apply_to_matches by edit_stuff to change items
 sub _es_set_attrs {
   say "setting attrs ..."; #ASSERT
   my ($list, $key) = @_;
@@ -438,6 +447,7 @@ sub _es_set_attrs {
   $contents->{$key} = $replacement;
 }
 
+# print information about items in list
 sub show_stuff {
   my ($ss_project, $ss_args) = @_;
 
@@ -501,6 +511,7 @@ sub _ss_dumper {
   }
 }
 
+# remove relevant items
 sub delete_stuff {
   my ($ds_file, $ds_data, $ds_args) = @_;
 
@@ -533,42 +544,12 @@ sub delete_stuff {
   return 0;
 }
 
+# passed to _apply_to_matches by delete_stuff to remove an item
 sub _ds_deleter {
   my ($project, $key) = @_;
 
   if (_has_the_status($project->{contents}{$key}, $DEFAULT_STATUS)) {
     delete $project->{contents}{ $key };
-  }
-}
-
-# main application logic
-# TODO maybe move this definition to bin script?
-sub run {
-  configure_app($CONFIG_FILE);
-  
-  get_subcommand();
-
-  if (! GetOptions(%OPTS)) {
-    exit 1;
-  }
-
-  my @r_args = get_args();
-
-  my $r_project_file = find_project();
-
-  my $r_todos = LoadFile($r_project_file);
-
-  if ($ACTION == $Action::CREATE) {
-    exit create_stuff($r_project_file, $r_todos, \@r_args);
-  }
-  elsif ($ACTION == $Action::SHOW) {
-    exit show_stuff($r_todos, \@r_args);
-  }
-  elsif ($ACTION == $Action::EDIT) {
-    exit edit_stuff($r_project_file, $r_todos, \@r_args);
-  }
-  elsif ($ACTION == $Action::DELETE) {
-    exit delete_stuff($r_project_file, $r_todos, \@r_args);
   }
 }
 
