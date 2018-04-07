@@ -5,4 +5,35 @@
 # brief: manage project objectives
 
 use App::Devel::Todo;
-run();
+use Getopt::Long;
+
+Getopt::Long::Configure('no_ignore_case');
+
+configure_app($CONFIG_FILE);
+  
+get_subcommand();
+
+if (! GetOptions(%OPTS)) {
+  exit 1;
+}
+
+my @r_args = get_args();
+
+my $r_project_file = find_project();
+
+my $r_todos = LoadFile($r_project_file);
+
+if ($ACTION == $Action::CREATE) {
+  exit create_stuff($r_project_file, $r_todos, \@r_args);
+}
+elsif ($ACTION == $Action::SHOW) {
+  exit show_stuff($r_todos, \@r_args);
+}
+elsif ($ACTION == $Action::EDIT) {
+  exit edit_stuff($r_project_file, $r_todos, \@r_args);
+}
+elsif ($ACTION == $Action::DELETE) {
+  exit delete_stuff($r_project_file, $r_todos, \@r_args);
+}
+
+exit 0;

@@ -10,7 +10,7 @@ use warnings;
 use Module::Build;
 
 my $build = Module::Build->new(
-  dist_version  => '0.01',
+  dist_version  => '0.05',
   dist_abstract => 'META.yml',
   module_name   => 'App::Devel::Todo',
   install_path  => { conf => "$ENV{HOME}/bin" },

@@ -12,20 +12,20 @@ BEGIN {
   use Exporter;
 
   our @ISA = qw/Exporter/;
-  our @EXPORT = qw/&run/;
-  our %EXPORT_TAGS = (
-    test => [qw/&run &configure_app &find_project/]
-  );
+  our @EXPORT = qw{
+    &configure_app &get_subcommand &get_args
+    &find_project &create_stuff &edit_stuff
+    &show_stuff &delete_stuff
+    %OPTS
+  };
 }
 
 use feature qw/say/;
 
 use Const::Fast;
-use Getopt::Long;
 use Cwd qw/cwd/;
 use File::Basename;
-use Carp;
-use YAML::XS qw/LoadFile Dump/;
+use YAML::XS qw/LoadFile DumpFile Dump/;
 
 # actions the app may take upon the selected todos
 package Action {
@@ -37,8 +37,8 @@ package Action {
   const our $SHOW   => 3; # print information about todo/s
 }
 
-# lists defined in a todos file
-package List {
+# stati defined in a todos file
+package Status {
   use Const::Fast;
 
   const our $TODO => "do";
@@ -46,51 +46,68 @@ package List {
   const our $WANT => "want";
 }
 
-our $VERSION      = '0.01';
-our $CWD          = cwd;
+# config variables always relevant to the program
+our $VERSION      = '0.05';
 our $CONFIG_FILE  = "$ENV{HOME}/.todorc"; # location of global configuration
-our $TODO_DIR     = $CWD; # where the search for todo files begins
-our $ACTION       = $Action::CREATE; # what will be done with the todos
-our $MOVE_SOURCE  = '';
+our $TODO_DIR     = cwd; # where the search for todo files begins
+our $TODO_FILE    = '';
+
+# the general action which will be taken by the program
+our $ACTION = $Action::CREATE;
+
+# default attributes
+our $DEFAULT_STATUS      = $Status::TODO;
+our $DEFAULT_PRIORITY    = 0;
+our $DEFAULT_DESCRIPTION = '';
+
+# attributes given on the command line
+our $STATUS      = '';
+our $PRIORITY    = '';
+our $DESCRIPTION = '';
+
+# before creating a new todo, an old one that matches may be moved
 our $MOVE_ENABLED = 1;
-our $FOCUSED_LIST = $List::TODO; # which part of todo list will be accessed
+
+# declare command-line options
 our %OPTS = (
-      'help|h'    => \&HELP,
-      'version|v' => \&VERSION,
-      'local|g'   => sub { $TODO_DIR = $CWD },
-      'global|g'  => sub { $TODO_DIR = $ENV{HOME} },
-      'delete|d'  => sub { $ACTION   = $Action::DELETE; },
-      'create|c'  => sub { $ACTION   = $Action::CREATE; },
-      'edit|e'    => sub { $ACTION   = $Action::EDIT; },
-      'show|s'    => sub { $ACTION   = $Action::SHOW; },
-      'W|move-from-want' => sub { $MOVE_SOURCE = $List::WANT; },
-      'F|move-from-done' => sub { $MOVE_SOURCE = $List::DONE; },
-      'D|move-from-todo' => sub { $MOVE_SOURCE = $List::TODO; },
-      'C|create-no-move' => sub { $ACTION = $Action::CREATE; $MOVE_ENABLED = 0; }
+  'help|h'              => \&_help,
+  'version|v'           => \&_version,
+  'delete|D'            => sub { $ACTION   = $Action::DELETE; },
+  'create|C'            => sub { $ACTION   = $Action::CREATE; },
+  'edit|E'              => sub { $ACTION   = $Action::EDIT; },
+  'show|S'              => sub { $ACTION   = $Action::SHOW; },
+  'create-no-move|N'    => sub { $ACTION = $Action::CREATE; $MOVE_ENABLED = 0; },
+  'config-file|f=s'     => \$CONFIG_FILE,
+  'todo-file|t=s'       => \$TODO_FILE,
+  'use-status|s=s'      => \$STATUS,
+  'use-priority|p=s'    => \$PRIORITY,
+  'use-description|d=s' => \$DESCRIPTION
 );
 
 # print a help message appropriate to the situation and exit
-sub HELP {
+sub _help {
   my $h_type = shift || 's';
   my $h_general_help = <<EOM;
--h|--help            print help
--v|--version         print application version information
--s|--show            print item/s from the currently selected list
--e|--edit            change list item information
--c|--create          add new item/s to selected list or move from another list
--C|--create-no-move  add new item/s to selected list without moving
--d|--delete          remove item/s from selected list. 
--l|--local           attempt to find ".todos" in the current working directory
--g|--global          search \$HOME for ".todos"
--W|--move-from-want  if moving would occur, use the "want" list
--F|--move-from-done  if moving would occur, use the "done" list
--D|--move-from-todo  if moving would occur, use the "todo" list
+Options:
+
+-h|--help              print help
+-v|--version           print application version information
+-S|--show              print item/s from the currently selected list
+-E|--edit              change list item information
+-C|--create            add new item/s to selected list or move from another list
+-N|--create-no-move    add new item/s to selected list without moving
+-D|--delete            remove item/s from selected list
+-f|--config-file=s     set global configuration file
+-t|--todo-file=s       set project file
+-s|--use-status=s      set the status used by some actions
+-p|--use-priority=s    set the priority used by some actions
+-d|--use-description=s set the description used by some actions 
 EOM
 
   my %h_messages = (
-    $List::TODO => "selects your todo list",
-    $List::DONE => "selects your list of finished tasks",
-    $List::WANT => "selects your list of goals"
+    $Status::TODO => "selects your todo list",
+    $Status::DONE => "selects your list of finished tasks",
+    $Status::WANT => "selects your list of goals"
   );
   
   if ($h_type eq 'a') {
@@ -99,45 +116,46 @@ EOM
   }
   else {
     # help with subcommand
-    say $h_messages{$FOCUSED_LIST};
+    say $h_messages{$DEFAULT_STATUS};
   }
 
   exit 0;
 }
 
 # print the application name and version number and exit
-sub VERSION {
+sub _version {
   say "todo $VERSION";
 
   exit 0;
 }
 
 # auxiliary function to collect the subcommand
-sub process_subcommand {
+sub get_subcommand {
   my $ps_num_args = scalar @ARGV;
 
   if ($ps_num_args == 0) {
-    HELP('a');
+    _help('a');
   }
   else {
     # expect a subcommand or global option
     if ($ARGV[0] eq '-v' || $ARGV[0] eq '--version') {
-      VERSION();
+      _version();
     }
     elsif ($ARGV[0] eq '-h' || $ARGV[0] eq '--help') {
-      HELP('a');
+      _help('a');
     }
-    elsif ($ARGV[0] eq $List::TODO) {
-      $FOCUSED_LIST = $List::TODO;
+    elsif ($ARGV[0] eq $Status::TODO) {
+      $DEFAULT_STATUS = $Status::TODO;
     }
-    elsif ($ARGV[0] eq $List::DONE) {
-      $FOCUSED_LIST = $List::DONE;
+    elsif ($ARGV[0] eq $Status::DONE) {
+      $DEFAULT_STATUS = $Status::DONE;
     }
-    elsif ($ARGV[0] eq $List::WANT) {
-      $FOCUSED_LIST = $List::WANT;
+    elsif ($ARGV[0] eq $Status::WANT) {
+      $DEFAULT_STATUS = $Status::WANT;
     }
     else {
-      croak "expected subcommand or global option";
+      say "expected subcommand or global option";
+      exit 1;
     }
 
     shift @ARGV;
@@ -149,7 +167,7 @@ sub process_subcommand {
 }
 
 # process non-option arguments into a list of keys and values
-sub process_args {
+sub get_args {
   my @pa_out  = ();
 
   my $pa_key   = "";
@@ -179,7 +197,7 @@ sub process_args {
       $pa_blob  = [];
       $pa_count = 0;
 
-      push @pa_out, [$1, $2];
+      push @pa_out, [$1, [$2] ];
 
       next;
     }
@@ -191,13 +209,16 @@ sub process_args {
         push @pa_out, $1;
       }
       else {
+        $pa_count++;
+
         push @$pa_blob, $1;
       }
 
       next;
     }
 
-    croak "arg $_ is invalid";
+    say "arg $_ is invalid";
+    exit 1;
   }
 
   if ($pa_count) {
@@ -205,17 +226,6 @@ sub process_args {
   }
 
   return @pa_out;
-}
-
-# return the name of the list which should be used for moving
-sub get_move_source {
-  return $MOVE_SOURCE if ($MOVE_SOURCE ne '');
-
-  return $List::WANT if ($FOCUSED_LIST eq $List::TODO);
-
-  return $List::TODO if ($FOCUSED_LIST eq $List::WANT);
-
-  return $List::TODO if ($FOCUSED_LIST eq $List::DONE);
 }
 
 # load the global configuration file settings
@@ -248,152 +258,297 @@ sub find_project {
     }
   }
   
-  croak "no project file found" unless -f $fp_file;
+  unless (-f $fp_file) {
+    say "no project file found";
+    exit 1;
+  }
 
   return $fp_file;
 }
 
+# does list item have a status?
+sub _has_the_status {
+  my ($item, $status) = @_;
+
+  if (ref($item) eq "HASH") {
+    if (exists $item->{status}) {
+      return ($status eq $item->{status});
+    }
+    else {
+      return ($DEFAULT_STATUS eq $status);
+    }
+  }
+  else {
+    return ($status eq $item);
+  }
+}
+
+# does todo list have item named key?
+sub _has_key {
+  my ($project, $key) = @_;
+
+  return (exists $project->{contents}{$key});
+}
+
+# is scalar a todo list?
+sub _has_contents {
+  my $val = shift;
+
+  return (ref($val) eq 'HASH' && exists $val->{contents}
+    && ref($val->{contents}) eq 'HASH');
+}
+
+# create an item or maybe change an existing one
 sub create_stuff {
-  my ($file, $contents, $args) = @_;
+  my ($cs_file, $cs_project, $cs_args) = @_;
+
+  my $cs_item = _cs_maker();
+  for (@$cs_args) {
+    if ($MOVE_ENABLED
+      && _apply_to_matches(\&_cs_mover, $cs_project, $_)) {
+
+      next;
+    }
+    elsif (ref($_) eq 'ARRAY') {
+      say "adding contents of array"; #ASSERT
+      my $cs_sublist = $cs_project->{contents}{ $_->[0] };
+
+      # make several items with identical values in a sublist
+      for my $cs_item_name (@{ $_->[1] }) {
+        $cs_sublist->{contents}{$cs_item_name} = $cs_item;
+      }
+    }
+    else {
+      say "adding a simple scalar"; #ASSERT
+      # make one item using $STATUS, $PRIORITY, $DESCRIPTION
+      $cs_project->{contents}{$_} = $cs_item;
+    }
+  }
+
+  DumpFile($cs_file, $cs_project);
 
   return 0;
 }
 
+# passed to _apply_to_matches by create_stuff to move an item
+sub _cs_mover {
+  my ($project, $key) = @_;
+
+  if (ref() eq 'HASH') {
+    $project->{contents}{$key}{status} = $DEFAULT_STATUS;
+  }
+  else {
+    $project->{contents}{$key} = $DEFAULT_STATUS;
+  }
+}
+
+sub _cs_maker {
+  my $out = {};
+
+  if ($PRIORITY eq '' && $DESCRIPTION eq '') {
+    if ($STATUS eq '') {
+      return $DEFAULT_STATUS;
+    }
+    else {
+      return $STATUS;
+    }
+  }
+  elsif ($PRIORITY eq '') {
+    $out->{description} = $DESCRIPTION unless ($DESCRIPTION eq '');
+  }
+  elsif ($DESCRIPTION eq '') {
+    $out->{priority} = $PRIORITY unless ($PRIORITY eq '');
+  }
+  else {
+    $out->{status} = $STATUS unless ($STATUS eq '');
+  }
+  
+  return $out;
+}
+
+# call a function on all relevant items
+sub _apply_to_matches {
+  my $sub   = shift;
+  my $start = shift;
+  my $key   = shift;
+
+  if (ref($key) eq 'ARRAY') {
+    return 0 unless _has_key($start, $key->[0]);
+
+    my $count   = 0;
+    my $sublist = $start->{contents}{ $key->[0] };
+
+    if (_has_contents($sublist)) {
+      foreach ($key->[1]) {
+        $count += _apply_to_matches($sub, $sublist, $_);
+      }
+
+      return $count;
+    }
+    else {
+      return 0;
+    }
+  }
+  else {
+    return 0 unless _has_key($start, $key);
+
+    &{ $sub }($start, $key);
+  }
+
+  return 1;
+}
+
+# change relevant items 
 sub edit_stuff {
-  my ($file, $contents, $args) = @_;
+  my ($es_file, $es_project, $es_args) = @_;
+  
+  unless (_has_contents($es_project)) {
+    say "value of contents in list or sublist MUST be hash";
+    return 1;
+  }
+
+  foreach (@$es_args) {
+    _apply_to_matches(\&_es_set_attrs, $es_project, $_);
+  }
+
+  DumpFile($es_file, $es_project);
 
   return 0;
 }
 
+# passed to _apply_to_matches by edit_stuff to change items
+sub _es_set_attrs {
+  say "setting attrs ..."; #ASSERT
+  my ($list, $key) = @_;
+
+  my $contents = $list->{contents};
+
+  return if ($STATUS eq '' && $PRIORITY eq '' && $DESCRIPTION eq '');
+
+  my $replacement = {};
+
+  if (ref($contents->{$key}) eq "HASH") {
+    $replacement = $contents->{$key};
+  }
+  
+  unless ($STATUS eq '') {
+    $replacement->{status} = $STATUS;
+  }
+
+  unless ($PRIORITY eq '') {
+    $replacement->{priority} = $PRIORITY;
+  }
+
+  unless ($DESCRIPTION eq '') {
+    $replacement->{description} = $DESCRIPTION;
+  }
+
+  $contents->{$key} = $replacement;
+}
+
+# print information about items in list
 sub show_stuff {
   my ($ss_project, $ss_args) = @_;
 
-  unless (exists $ss_project->{contents}
-      and ref($ss_project->{contents}) eq "HASH") {
-
+  unless (_has_contents($ss_project)) {
     say "error: nothing to show";
 
     return 1;
   }
 
-  # try to print args that name sublists
   if (scalar @$ss_args) {
-    my $ss_contents = $ss_project->{contents};
-
     foreach (@$ss_args) {
+      # ignore arrayref args
       if (ref($_) eq '') {
-        if (exists $ss_contents->{ $_ } && ref($ss_contents->{ $_ }) eq "HASH") {
-          ss_dump_stuff($ss_contents->{ $_ }, $_, 0);
-        }
+        _apply_to_matches(\&_ss_dumper, $ss_project, $_);
       }
     }
   }
-  # just print everything that is not too deeply nested
   else {
-    ss_dump_stuff($ss_project, "", 0);
+    _ss_dumper($ss_project, '');
   }
 
   return 0;
 }
 
-# print contents of 'list' if have the right status
-sub ss_dump_stuff {
-  my $stuff = shift;
-  my $head  = shift;
-  my $shift = shift || 0;
+# print contents of 'list' if items have the right status
+sub _ss_dumper {
+  my $project = shift;
+  my $key     = shift;
 
-  my $has_printed_head = 0;
+  my $has_printed_key = 0;
+  $has_printed_key    = 1 if $key eq '';
 
-  $has_printed_head = 1 if ($head eq "");
-
-  return if ($shift > 1);
-
-  while ((my ($key, $value) = each %{ $stuff->{contents} })) {
-    my $reftype = ref $value;
-
-    if ($reftype eq "") {
-      if ($value eq $FOCUSED_LIST) {
-        unless ($has_printed_head) {
-          say ' ' x ($shift - 1), $head, ':';
-          $has_printed_head = 1;
-        }
-
-        say ' ' x $shift, $key;
+  if ($key eq '') {
+    # print each item, excluding sublists, if it has the right status
+    # apply the same rule to the ITEMS of a sublist
+    while ((my ($k, $v) = each %{ $project->{contents} })) {
+      if (_has_contents($v)) {
+        _ss_dumper($project, $k);
+      }
+      elsif (_has_the_status($v, $DEFAULT_STATUS)) {
+        say $k; # TODO show more information about todo, i.e. attributes
       }
     }
-    elsif ($reftype eq "HASH" and exists $value->{contents}) {
-      ss_dump_stuff($value, $key, $shift + 1);
-    }
-    elsif ($reftype eq "HASH") {
-      if (exists $value->{status}) {
-        if ($value->{status} eq $FOCUSED_LIST) {
-          unless ($has_printed_head) {
-            say ' ' x ($shift - 1), $head, ':';
-            $has_printed_head = 1;
-          }
+  }
+  else { 
+    my $sublist = $project->{contents}{$key};
 
-          say ' ' x $shift, $key;
-        }
-      }
-      else {
-        if ($FOCUSED_LIST eq $List::TODO) {
-          unless ($has_printed_head) {
-            say ' ' x ($shift - 1), $head, ':';
-            $has_printed_head = 1;
-          }
+    return unless _has_contents($sublist);
 
-          say $key;
+    while ((my ($k, $v) = each %{ $sublist->{contents} })) {
+      if (_has_the_status($v, $DEFAULT_STATUS)) {
+        unless ($has_printed_key) {
+          say $key, ':';
+
+          $has_printed_key = 1;
         }
+
+        say '  ', $k; # TODO show more information about todo, i.e. attributes
       }
     }
   }
 }
 
+# remove relevant items
 sub delete_stuff {
-  my ($file, $contents, $args) = @_;
+  my ($ds_file, $ds_data, $ds_args) = @_;
+
+  unless (_has_contents($ds_data)) {
+    say "nothing to delete";
+    return 1;
+  }
+
+  my $ds_contents = $ds_data->{contents};
+  if (scalar @$ds_args) {
+    foreach (@$ds_args) {
+      _apply_to_matches(\&_ds_deleter, $ds_data, $_);
+    }
+  }
+  else {
+    for my $key (keys %{$ds_contents}) {
+      if (_has_the_status($ds_contents->{$key}, $DEFAULT_STATUS)) {
+        delete $ds_contents->{$key};
+      }
+      elsif (_has_contents($ds_contents->{$key})) {
+        while ((my ($subkey, $subvalue) = each %{ $ds_contents->{$key}{contents} })) {
+          _ds_deleter($ds_contents->{$key}, $subkey);
+        }
+      }
+    }
+  }
+
+  DumpFile($ds_file, $ds_data);
 
   return 0;
 }
 
-# main application logic
-sub run {
-  configure_app($CONFIG_FILE);
-  
-  process_subcommand();
+# passed to _apply_to_matches by delete_stuff to remove an item
+sub _ds_deleter {
+  my ($project, $key) = @_;
 
-  if (! GetOptions(%OPTS)) {
-    exit 1;
-  }
-
-  if ($MOVE_SOURCE eq '') {
-    if ($FOCUSED_LIST eq $List::WANT) {
-      $MOVE_SOURCE = $List::TODO;
-    }
-    elsif ($FOCUSED_LIST eq $List::TODO) {
-      $MOVE_SOURCE = $List::WANT;
-    }
-    else {
-      $MOVE_SOURCE = $List::TODO;
-    }
-  }
-
-  my @r_args = process_args();
-
-  my $r_project_file = find_project();
-
-  my $r_todos = LoadFile($r_project_file);
-
-  if ($ACTION == $Action::CREATE) {
-    exit create_stuff($r_project_file, $r_todos, \@r_args);
-  }
-  elsif ($ACTION == $Action::SHOW) {
-    exit show_stuff($r_todos, \@r_args);
-  }
-  elsif ($ACTION == $Action::EDIT) {
-    exit edit_stuff($r_project_file, $r_todos, \@r_args);
-  }
-  elsif ($ACTION == $Action::DELETE) {
-    exit delete_stuff($r_project_file, $r_todos, \@r_args);
+  if (_has_the_status($project->{contents}{$key}, $DEFAULT_STATUS)) {
+    delete $project->{contents}{ $key };
   }
 }
 
