@@ -23,7 +23,6 @@ BEGIN {
 use feature qw/say/;
 
 use Const::Fast;
-use Getopt::Long;
 use Cwd qw/cwd/;
 use File::Basename;
 use YAML::XS qw/LoadFile DumpFile Dump/;
@@ -85,24 +84,24 @@ our %OPTS = (
   'use-description|d=s' => \$DESCRIPTION
 );
 
-Getopt::Long::Configure('no_ignore_case');
-
 # print a help message appropriate to the situation and exit
 sub _help {
   my $h_type = shift || 's';
   my $h_general_help = <<EOM;
--h|--help            print help
--v|--version         print application version information
--s|--show            print item/s from the currently selected list
--e|--edit            change list item information
--c|--create          add new item/s to selected list or move from another list
--C|--create-no-move  add new item/s to selected list without moving
--d|--delete          remove item/s from selected list. 
--l|--local           attempt to find ".todos" in the current working directory
--g|--global          search \$HOME for ".todos"
--W|--move-from-want  if moving would occur, use the "want" list
--F|--move-from-done  if moving would occur, use the "done" list
--D|--move-from-todo  if moving would occur, use the "todo" list
+Options:
+
+-h|--help              print help
+-v|--version           print application version information
+-S|--show              print item/s from the currently selected list
+-E|--edit              change list item information
+-C|--create            add new item/s to selected list or move from another list
+-N|--create-no-move    add new item/s to selected list without moving
+-D|--delete            remove item/s from selected list
+-f|--config-file=s     set global configuration file
+-t|--todo-file=s       set project file
+-s|--use-status=s      set the status used by some actions
+-p|--use-priority=s    set the priority used by some actions
+-d|--use-description=s set the description used by some actions 
 EOM
 
   my %h_messages = (

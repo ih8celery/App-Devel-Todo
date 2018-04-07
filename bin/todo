@@ -5,6 +5,9 @@
 # brief: manage project objectives
 
 use App::Devel::Todo;
+use Getopt::Long;
+
+Getopt::Long::Configure('no_ignore_case');
 
 configure_app($CONFIG_FILE);
   
