@@ -48,8 +48,7 @@ package Status {
 
 # config variables always relevant to the program
 our $VERSION      = '0.05';
-our $CONFIG_FILE  = "$ENV{HOME}/.todorc"; # location of global configuration
-our $TODO_DIR     = cwd; # where the search for todo files begins
+our $CONFIG_FILE  = "$ENV{HOME}/.todorc";
 our $TODO_FILE    = '';
 
 # the general action which will be taken by the program
@@ -236,14 +235,7 @@ sub configure_app {
 # search recursively upward from the current directory for todos
 # until any project or the home directory is found
 sub find_project {
-  my $fp_dir;
-  if (-d $TODO_DIR) {
-    $fp_dir = $TODO_DIR;
-  }
-  else {
-    $fp_dir = $ENV{HOME};
-  }
-
+  my $fp_dir = cwd;
   my $fp_file = $fp_dir . '/' . '.todos';
 
   if ($fp_dir !~ /^$ENV{HOME}/) {
@@ -283,7 +275,7 @@ sub _has_the_status {
   }
 }
 
-# does todo list have item named key?
+# does todo list have item named after key?
 sub _has_key {
   my ($project, $key) = @_;
 
@@ -554,39 +546,110 @@ sub _ds_deleter {
 
 __END__
 
+=head1 Name
+
+todo -- manage your todo list
+
+  todo [global options] [subcommand] [options] [arguments]
+
 =head1 Summary
 
-C<todo> helps you manage your todo list by reading and writing to a
-YAML file. the file contains three lists for simplicity: the list of
-things to do, the list of things already done, and the list of things
-you may want to do but cannot prioritize now
+C<todo> helps you manage your todo list. Your list is a YAML file, which
+does not really contain a list, but a hash table. Your list is composed
+of items. An item has a name, which is the key to the hash table, and at
+least one attribute, its status. See the example below.
 
-=head1 Usage
+  ---
+  name: today
+  contents:
+    wake: did
+    eat: want
+    sleep: do
+    code:
+      status: do
+  ...
 
-todo [subcommand] [options] [arguments]
+The above yaml snippet shows two ways to set the status: as the value of
+the item in the document's B<contents> hash; and as the value of the
+key below the item. Either approach is valid. Note that in any case,
+every item B<must> be assigned a status. Status is a way of describing
+the current condition of an item. By default, you may choose from three
+statuses: "do", "did", and "want". Incidentally, the "subcommand" you
+use corresponds to the status of the items you want to create, see,
+delete, or edit.
 
-=head2 Subcommands
+The status is one of three possible attributes that an item may have.
+Unlike the status attribute, these attributes need not be present in an item.
+The other two attributes are priority, a positive integer, and description.
+A priority of zero is the default and is the 'first' priority, much as
+zero is the first index of arrays in most programming languages. The
+description is simply a string which should be used to clarify the
+meaning of an item.
 
-there are three subcommands which identify the list upon which the
-app will act:
+Items may contain an additional member: contents. The presence of this
+key indicates that an item is a todo list in its own right. Such a
+sublist may contain items just like its parent, with one exception:
+further sublists. 
+
+  ---
+  name: tomorrow
+  contents:
+    wake: do
+    eat: want
+    other:
+      status: do
+      contents:
+        walk my dog: do
+        sacrifice to Odin: do
+  ...
+
+Notice that both the parent todo list and its sublist other have a
+I<contents> key. The contents key is required for a list to be
+recognized.
+
+=head1 Subcommands
+
+Before you ask, the subcommands are not in fact "commands"; the actual
+commands reside among the regular options. You may attribute this mangling
+of convention to two lines of reasoning: first, I believed that the order
+of command-line arguments should correspond to how I formulate a todo in
+my own mind. I think first that I should B<do> foo, not B<add> foo to
+the list of items that I must do. Secondly, I found that using status
+instead of true commands better facilitated my two most common use
+cases: looking at everything in a list with a particular status, and
+adding a new item somewhere. For comparison, 
+
+  todo do     # shows everything with "do" status
+  todo do foo # adds a new item called foo with "do" status
+
+allows me to differentiate between showing and adding items simply by
+the presence or absence of additional arguments. But
+
+  todo show --do
+  todo add --do foo
+
+requires an extra piece of information in most cases (if "do" were the
+default status we could shorten this example by removing C<--do>,
+but this still leaves the other statuses. Judge this tradeoff how you
+will.
 
 =over 4
 
 =item do
 
-select the list of todos
+select items with "do" status
 
 =item did
 
-select the list of completed items
+select items with "did" status
 
 =item want
 
-select the list of goal items
+select items with "want" status
 
 =back
 
-=head2 General Options
+=head1 General Options
 
 =over 4
 
@@ -621,32 +684,9 @@ from another list
 
 remove item/s from selected list. 
 
-=item -l|--local
-
-attempt to find ".todos" in the current working directory. ignored
-if directory is not descended from $HOME. creates a file if no
-".todos" exists in directory
-
-=item -g|--global
-
-search $HOME for ".todos". if the file is not found, it will be
-created
-
-=item -W|--move-from-want
-
-if moving would occur, use the "want" list instead of the default
-
-=item -F|--move-from-done
-
-if moving would occur, use the "done" list instead of the default
-
-=item -D|--move-from-todo
-
-if moving would occur, use the "todo" list instead of the default
-
 =back
 
-=head2 Arguments
+=head1 Arguments
 
 arguments are used to identify items and groups of items. there are
 three types of arguments:
@@ -680,19 +720,6 @@ not exist. add a description to a value by following it with '='
 =back
 
 =head1 Examples
-
-Sample ".todos":
-
----
-todo:
-  - finish documenting todo-app
-did:
-  - wash dirty laundry
-want:
-  - exercise
-  - sleep
-...
-
 
 todo do "eat something"
 
