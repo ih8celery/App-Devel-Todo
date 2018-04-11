@@ -13,11 +13,6 @@ BEGIN {
 
   our @ISA = qw/Exporter/;
   our @EXPORT = qw/&run/;
-  our %EXPORT_TAGS = (test => qw{
-    &configure_app &get_possible_subcommand &get_args
-    &find_project &create_stuff &edit_stuff
-    &show_stuff &delete_stuff &run %OPTS
-  });
 }
 
 use feature qw/say/;
@@ -60,14 +55,14 @@ our $DESCRIPTION_OPT;
 our $MOVE_ENABLED = 1;
 
 # controls whether a help message will be printed for subcommand
-our $HELP_ENABLED = 0;
+our $HELP_REQUESTED = 0;
 
 # options are case-sensitive
 Getopt::Long::Configure('no_ignore_case');
 
 # declare command-line options
 our %OPTS = (
-  'help|h'              => sub { $HELP_ENABLED = 1; },
+  'help|h'              => sub { $HELP_REQUESTED = 1; },
   'version|v'           => \&_version,
   'delete|D'            => sub { $ACTION = $Action::DELETE; },
   'create|C'            => sub { $ACTION = $Action::CREATE; },
@@ -173,7 +168,7 @@ sub get_possible_subcommand {
 }
 
 # process non-option arguments into a list of keys and values
-sub get_args {
+sub process_args {
   my @pa_out  = ();
 
   my $pa_key   = "";
@@ -288,6 +283,8 @@ sub find_project {
 sub _has_the_status {
   my ($item, $status) = @_;
 
+  return 1 if ($STATUS eq 'all');
+
   if (ref($item) eq "HASH") {
     if (exists $item->{status} && defined $item->{status}) {
       return ($status eq $item->{status});
@@ -319,6 +316,8 @@ sub _has_contents {
 # create an item or maybe change an existing one
 sub create_stuff {
   my ($cs_file, $cs_project, $cs_args) = @_;
+
+  _error('cannot create with \'all\' status') if ($STATUS eq 'all');
 
   my $cs_item = _cs_maker();
   for (@$cs_args) {
@@ -417,6 +416,7 @@ sub edit_stuff {
   my ($es_file, $es_project, $es_args) = @_;
   
   _error('list must have contents') unless (_has_contents($es_project));
+  _error('cannot edit with \'all\' status') if ($STATUS eq 'all');
 
   foreach (@$es_args) {
     _apply_to_matches(\&_es_set_attrs, $es_project, $_);
@@ -576,24 +576,24 @@ sub run {
   # latter are invalid for some reason, they will be ignored
   configure_app($CONFIG_FILE);
 
-  # prints help for subcommand
-  # this function is called here because not all subcommands
-  # may be known until after the app is configured
-  _help('s') if $HELP_ENABLED;
-
   # verify the possible subcommand
   if (exists $STATUSES{$r_STATUS}) {
     $STATUS = $r_STATUS;
   }
   else {
-    _error("not a valid subcommand: $r_STATUS");
+    _error("unknown subcommand: $r_STATUS");
   }
 
   $DEFAULT_STATUS = $STATUS unless ($STATUS eq 'all');
+  
+  # prints help for subcommand
+  # this function is called here because not all subcommands
+  # may be known until after the app is configured
+  _help('s') if $HELP_REQUESTED;
 
   # processes remaining command-line arguments into keys and values
   # so that it is clear which parts of the 'lists' will be affected
-  @r_args = get_args();
+  @r_args = process_args();
 
   $r_project_file = find_project();
 
@@ -725,7 +725,8 @@ select items with "want" status
 
 =item all
 
-select everything, regardless of status
+select everything, regardless of status. this subcommand cannot be
+used in combination with creating or editing items
 
 =back
 
