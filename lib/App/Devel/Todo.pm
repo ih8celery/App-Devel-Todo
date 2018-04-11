@@ -12,17 +12,18 @@ BEGIN {
   use Exporter;
 
   our @ISA = qw/Exporter/;
-  our @EXPORT = qw{
-    &configure_app &get_subcommand &get_args
+  our @EXPORT = qw/&run/;
+  our %EXPORT_TAGS = (test => qw{
+    &configure_app &get_possible_subcommand &get_args
     &find_project &create_stuff &edit_stuff
-    &show_stuff &delete_stuff
-    %OPTS
-  };
+    &show_stuff &delete_stuff &run %OPTS
+  });
 }
 
 use feature qw/say/;
 
-use Cwd qw/cwd/;
+use Getopt::Long;
+use Cwd qw/getcwd/;
 use File::Basename;
 use YAML::XS qw/LoadFile DumpFile/;
 
@@ -36,31 +37,37 @@ package Action {
 
 # config variables always relevant to the program
 our $VERSION      = '0.05';
-our $CONFIG_FILE  = "$ENV{HOME}/.todorc";
+our $CONFIG_FILE  = "$ENV{HOME}/.todorc.yml";
 our $TODO_FILE    = '';
 
 # the general action which will be taken by the program
 our $ACTION = $Action::CREATE;
 
 # status selected by the subcommand
-our $STATUS = "do";
+our $STATUS = 'do';
 
 # default attributes
-our $DEFAULT_STATUS      = "do";
+our $DEFAULT_STATUS      = 'do';
 our $DEFAULT_PRIORITY    = 0;
 our $DEFAULT_DESCRIPTION = '';
 
 # attributes given on the command line
-our $STATUS_OPT      = '';
-our $PRIORITY_OPT    = '';
-our $DESCRIPTION_OPT = '';
+our $STATUS_OPT;
+our $PRIORITY_OPT;
+our $DESCRIPTION_OPT;
 
 # before creating a new todo, an old one that matches may be moved
 our $MOVE_ENABLED = 1;
 
+# controls whether a help message will be printed for subcommand
+our $HELP_ENABLED = 0;
+
+# options are case-sensitive
+Getopt::Long::Configure('no_ignore_case');
+
 # declare command-line options
 our %OPTS = (
-  'help|h'              => \&_help,
+  'help|h'              => sub { $HELP_ENABLED = 1; },
   'version|v'           => \&_version,
   'delete|D'            => sub { $ACTION = $Action::DELETE; },
   'create|C'            => sub { $ACTION = $Action::CREATE; },
@@ -86,7 +93,6 @@ sub _help {
   my $h_type = shift || 's';
   my $h_general_help = <<EOM;
 Options:
-
 -h|--help              print help
 -v|--version           print application version information
 -S|--show              print item/s from the currently selected list
@@ -102,11 +108,9 @@ Options:
 EOM
 
   if ($h_type eq 'a') {
-    # general help
     say $h_general_help;
   }
   else {
-    # help with subcommand
     say $STATUSES{$STATUS};
   }
 
@@ -120,41 +124,52 @@ sub _version {
   exit 0;
 }
 
-# auxiliary function to collect the subcommand
-sub get_subcommand {
-  my $ps_num_args = scalar @ARGV;
+sub _error {
+  my ($msg, $code) = @_;
 
-  if ($ps_num_args == 0) {
+  if (defined $msg) {
+    say 'error: ', $msg;
+  }
+  else {
+    say 'usage: todo [-h|-v] [subcommand [options] [arguments]]';
+  }
+
+  if (defined $code) {
+    return $code;
+  }
+  else {
+    return 1;
+  }
+}
+
+# auxiliary function to collect the subcommand
+sub get_possible_subcommand {
+  my $gs_num_args = scalar @ARGV;
+  my $gs_STATUS;
+
+  if ($gs_num_args == 0) {
     _help('a');
   }
   else {
-    # expect a subcommand or global option
     if ($ARGV[0] eq '-v' || $ARGV[0] eq '--version') {
       _version();
     }
     elsif ($ARGV[0] eq '-h' || $ARGV[0] eq '--help') {
       _help('a');
     }
-    elsif ($ARGV[0] eq "do") {
-      $STATUS = "do";
-    }
-    elsif ($ARGV[0] eq "did") {
-      $STATUS = "did";
-    }
-    elsif ($ARGV[0] eq "want") {
-      $STATUS = "want";
+    elsif ($ARGV[0] =~ m/\w[\w\-\+\.\/]*/) {
+      $gs_STATUS = $ARGV[0];
     }
     else {
-      say "expected subcommand or global option";
-      exit 1;
+      _error("expected subcommand or global option");
     }
-
-    shift @ARGV;
   }
 
-  if ($ps_num_args == 1) {
+  if ($gs_num_args == 1) {
     $ACTION = $Action::SHOW;
   }
+
+  return $gs_STATUS;
 }
 
 # process non-option arguments into a list of keys and values
@@ -208,8 +223,7 @@ sub get_args {
       next;
     }
 
-    say "arg $_ is invalid";
-    exit 1;
+    _error("arg $_ is invalid");
   }
 
   if ($pa_count) {
@@ -220,14 +234,37 @@ sub get_args {
 }
 
 # load the global configuration file settings
+# TODO
 sub configure_app {
-  return 1;
+  my ($ca_file) = @_;
+  _error('config file not found') unless -f $ca_file;
+
+  my $ca_settings = LoadFile($ca_file);
+  
+  # create new statuses, if any
+  if (defined $ca_settings->{statuses}) {
+    foreach (keys %{ $ca_settings->{statuses} }) {
+      if ($_ =~ m/\w[\w\-\+\.\/]*/ && !exists($STATUSES{$_})) {
+        if (ref $ca_settings->{statuses}{$_} eq '') {
+          $STATUSES{$_} = $ca_settings->{statuses}{$_};
+        }
+        else {
+          _error('new status must be created with a help message');
+        }
+      }
+      else {
+        _error('new status must match \'\\w[\\w\\-\\+\\.\\/]*\' and not already exist');
+      }
+    }
+  }
+
+  # set defaults, if any
 }
 
 # search recursively upward from the current directory for todos
 # until any project or the home directory is found
 sub find_project {
-  my $fp_dir = cwd;
+  my $fp_dir = getcwd;
   my $fp_file = $fp_dir . '/' . '.todos';
 
   if ($fp_dir !~ /^$ENV{HOME}/) {
@@ -242,10 +279,7 @@ sub find_project {
     }
   }
   
-  unless (-f $fp_file) {
-    say "no project file found";
-    exit 1;
-  }
+  _error('no project file found') unless (-f $fp_file);
 
   return $fp_file;
 }
@@ -255,7 +289,7 @@ sub _has_the_status {
   my ($item, $status) = @_;
 
   if (ref($item) eq "HASH") {
-    if (exists $item->{status}) {
+    if (exists $item->{status} && defined $item->{status}) {
       return ($status eq $item->{status});
     }
     else {
@@ -276,7 +310,7 @@ sub _has_key {
 
 # is scalar a todo list?
 sub _has_contents {
-  my $val = shift;
+  my ($val) = @_;
 
   return (ref($val) eq 'HASH' && exists $val->{contents}
     && ref($val->{contents}) eq 'HASH');
@@ -294,7 +328,6 @@ sub create_stuff {
       next;
     }
     elsif (ref($_) eq 'ARRAY') {
-      say "adding contents of array"; #ASSERT
       my $cs_sublist = $cs_project->{contents}{ $_->[0] };
 
       # make several items with identical values in a sublist
@@ -303,7 +336,6 @@ sub create_stuff {
       }
     }
     else {
-      say "adding a simple scalar"; #ASSERT
       # make one item using $STATUS_OPT, $PRIORITY_OPT, $DESCRIPTION_OPT
       $cs_project->{contents}{$_} = $cs_item;
     }
@@ -318,7 +350,7 @@ sub create_stuff {
 sub _cs_mover {
   my ($project, $key) = @_;
 
-  if (ref() eq 'HASH') {
+  if (ref($project->{contents}{$key}) eq 'HASH') {
     $project->{contents}{$key}{status} = $STATUS;
   }
   else {
@@ -326,10 +358,11 @@ sub _cs_mover {
   }
 }
 
+# create a new list item
 sub _cs_maker {
   my $out = {};
 
-  if (!defined($PRIORITY_OPT) || !defined($DESCRIPTION_OPT)) {
+  if (!defined($PRIORITY_OPT) && !defined($DESCRIPTION_OPT)) {
     return $DEFAULT_STATUS unless defined $STATUS_OPT;
 
     return $STATUS_OPT;
@@ -383,10 +416,7 @@ sub _apply_to_matches {
 sub edit_stuff {
   my ($es_file, $es_project, $es_args) = @_;
   
-  unless (_has_contents($es_project)) {
-    say "value of contents in list or sublist MUST be hash";
-    return 1;
-  }
+  _error('list must have contents') unless (_has_contents($es_project));
 
   foreach (@$es_args) {
     _apply_to_matches(\&_es_set_attrs, $es_project, $_);
@@ -399,28 +429,28 @@ sub edit_stuff {
 
 # passed to _apply_to_matches by edit_stuff to change items
 sub _es_set_attrs {
-  say "setting attrs ..."; #ASSERT
   my ($list, $key) = @_;
 
   my $contents = $list->{contents};
 
-  return if ($STATUS_OPT eq '' && $PRIORITY_OPT eq '' && $DESCRIPTION_OPT eq '');
+  return unless (defined $STATUS_OPT 
+    || defined $PRIORITY_OPT || defined $DESCRIPTION_OPT);
 
   my $replacement = {};
 
-  if (ref($contents->{$key}) eq "HASH") {
+  if (ref($contents->{$key}) eq 'HASH') {
     $replacement = $contents->{$key};
   }
   
-  unless ($STATUS_OPT eq '') {
+  if (defined $STATUS_OPT) {
     $replacement->{status} = $STATUS_OPT;
   }
 
-  unless ($PRIORITY_OPT eq '') {
+  if (defined $PRIORITY_OPT) {
     $replacement->{priority} = $PRIORITY_OPT;
   }
 
-  unless ($DESCRIPTION_OPT eq '') {
+  if (defined $DESCRIPTION_OPT) {
     $replacement->{description} = $DESCRIPTION_OPT;
   }
 
@@ -431,11 +461,7 @@ sub _es_set_attrs {
 sub show_stuff {
   my ($ss_project, $ss_args) = @_;
 
-  unless (_has_contents($ss_project)) {
-    say "error: nothing to show";
-
-    return 1;
-  }
+  _error('nothing to show') unless (_has_contents($ss_project));
 
   if (scalar @$ss_args) {
     foreach (@$ss_args) {
@@ -495,10 +521,7 @@ sub _ss_dumper {
 sub delete_stuff {
   my ($ds_file, $ds_data, $ds_args) = @_;
 
-  unless (_has_contents($ds_data)) {
-    say "nothing to delete";
-    return 1;
-  }
+  _error('nothing to delete') unless (_has_contents($ds_data));
 
   my $ds_contents = $ds_data->{contents};
   if (scalar @$ds_args) {
@@ -533,6 +556,63 @@ sub _ds_deleter {
   }
 }
 
+# main application logic
+sub run {
+  my ($r_STATUS, $r_project_file, $r_todos);
+  my @r_args;
+
+  # the possible subcommand retrieved here will be verified
+  # after the config file has been processed, since status/
+  # subcommand may be defined there
+  $r_STATUS = get_possible_subcommand();
+  shift @ARGV;
+
+  if (! GetOptions(%OPTS)) {
+    exit 1;
+  }
+
+  # reads the configuration file, sets new app defaults if any
+  # defined, and creates new subcommands/statuses. if any of the
+  # latter are invalid for some reason, they will be ignored
+  configure_app($CONFIG_FILE);
+
+  # prints help for subcommand
+  # this function is called here because not all subcommands
+  # may be known until after the app is configured
+  _help('s') if $HELP_ENABLED;
+
+  # verify the possible subcommand
+  if (exists $STATUSES{$r_STATUS}) {
+    $STATUS = $r_STATUS;
+  }
+  else {
+    _error("not a valid subcommand: $r_STATUS");
+  }
+
+  $DEFAULT_STATUS = $STATUS unless ($STATUS eq 'all');
+
+  # processes remaining command-line arguments into keys and values
+  # so that it is clear which parts of the 'lists' will be affected
+  @r_args = get_args();
+
+  $r_project_file = find_project();
+
+  $r_todos = LoadFile($r_project_file);
+
+  if ($ACTION == $Action::CREATE) {
+    create_stuff($r_project_file, $r_todos, \@r_args);
+  }
+  elsif ($ACTION == $Action::SHOW) {
+    show_stuff($r_todos, \@r_args);
+  }
+  elsif ($ACTION == $Action::EDIT) {
+    edit_stuff($r_project_file, $r_todos, \@r_args);
+  }
+  elsif ($ACTION == $Action::DELETE) {
+    delete_stuff($r_project_file, $r_todos, \@r_args);
+  }
+}
+
 __END__
 
 =head1 Name
@@ -543,10 +623,10 @@ todo -- manage your todo list
 
 =head1 Summary
 
-C<todo> helps you manage your todo list. Your list is a YAML file, which
-does not really contain a list, but a hash table. Your list is composed
-of items. An item has a name, which is the key to the hash table, and at
-least one attribute, its status. See the example below.
+C<todo> helps you manage your todo list. your list is a YAML file, which
+does not really contain a list, but a hash table. your list is composed
+of items. an item has a name, which is the key to the hash table, and at
+least one attribute, its status. see the example below.
 
   ---
   name: today
@@ -558,25 +638,25 @@ least one attribute, its status. See the example below.
       status: do
   ...
 
-The above yaml snippet shows two ways to set the status: as the value of
+the above yaml snippet shows two ways to set the status: as the value of
 the item in the document's B<contents> hash; and as the value of the
-key below the item. Either approach is valid. Note that in any case,
-every item B<must> be assigned a status. Status is a way of describing
-the current condition of an item. By default, you may choose from three
-statuses: "do", "did", and "want". Incidentally, the "subcommand" you
+key below the item. either approach is valid. note that in any case,
+every item B<must> be assigned a status. status is a way of describing
+the current condition of an item. by default, you may choose from three
+statuses: "do", "did", and "want". incidentally, the "subcommand" you
 use corresponds to the status of the items you want to create, see,
 delete, or edit.
 
-The status is one of three possible attributes that an item may have.
-Unlike the status attribute, these attributes need not be present in an item.
-The other two attributes are priority, a positive integer, and description.
-A priority of zero is the default and is the 'first' priority, much as
-zero is the first index of arrays in most programming languages. The
+the status is one of three possible attributes that an item may have.
+unlike the status attribute, these attributes need not be present in an item.
+the other two attributes are priority, a positive integer, and description.
+a priority of zero is the default and is the 'first' priority, much as
+zero is the first index of arrays in most programming languages. the
 description is simply a string which should be used to clarify the
 meaning of an item.
 
-Items may contain an additional member: contents. The presence of this
-key indicates that an item is a todo list in its own right. Such a
+items may contain an additional member: contents. the presence of this
+key indicates that an item is a todo list in its own right. such a
 sublist may contain items just like its parent, with one exception:
 further sublists. 
 
@@ -592,35 +672,42 @@ further sublists.
         sacrifice to Odin: do
   ...
 
-Notice that both the parent todo list and its sublist other have a
-I<contents> key. The contents key is required for a list to be
+notice that both the parent todo list and its sublist 'other' have a
+I<contents> key. the contents key is required for a list to be
 recognized.
 
 =head1 Subcommands
 
-Before you ask, the subcommands are not in fact "commands"; the actual
-commands reside among the regular options. You may attribute this mangling
-of convention to two lines of reasoning: first, I believed that the order
+before you ask, the subcommands are not in fact "commands"; the actual
+commands reside among the regular options. you may attribute this mangling
+of convention to three lines of reasoning: first, I believed that the order
 of command-line arguments should correspond to how I formulate a todo in
 my own mind. I think first that I should B<do> foo, not B<add> foo to
-the list of items that I must do. Secondly, I found that using status
+the list of items that I must do. secondly, I found that using status
 instead of true commands better facilitated my two most common use
 cases: looking at everything in a list with a particular status, and
-adding a new item somewhere. For comparison, 
+adding a new item somewhere. for comparison, 
 
   todo do     # shows everything with "do" status
   todo do foo # adds a new item called foo with "do" status
 
 allows me to differentiate between showing and adding items simply by
-the presence or absence of additional arguments. But
+the presence or absence of additional arguments. but
 
   todo show --do
   todo add --do foo
 
 requires an extra piece of information in most cases (if "do" were the
 default status we could shorten this example by removing C<--do>,
-but this still leaves the other statuses. Judge this tradeoff how you
-will.
+but this still leaves the other statuses. finally, I wanted to allow
+users to define new statuses particular to how they work, which would
+be easier to support if the status had to appear as the first argument
+to C<todo>.
+
+NOTE: except for 'all', the subcommand sets the default status used by the
+program
+
+the following subcommands are automatically defined:
 
 =over 4
 
@@ -635,6 +722,10 @@ select items with "did" status
 =item want
 
 select items with "want" status
+
+=item all
+
+select everything, regardless of status
 
 =back
 
@@ -652,26 +743,47 @@ subcommand
 
 print application version information
 
-=item -s|--show
+=item -S|--show
 
 print item/s from the currently selected list
 
-=item -e|--edit
+=item -E|--edit
 
 change list item information
 
-=item -c|--create
+=item -C|--create
 
 add new item/s to selected list or move from another list
 
-=item -C|--create-no-move
+=item -N|--create-no-move
 
 add new item/s to selected list without the possibility of moving
 from another list
 
-=item -d|--delete
+=item -D|--delete
 
 remove item/s from selected list. 
+
+=item -s|--use-status
+
+specify a status. this is relevant when creating or editing items,
+and it is different from the status set by the subcommand
+
+=item -d|--use-description
+
+specify a description. this is relevant when creating or editing items
+
+=item -p|--use-priority
+
+specify a priority. this is relevant when creating or editing items
+
+=item -f|--config-file
+
+specify a different file to use as configuration file
+
+=item -t|--todo-file
+
+specify a different file to use as project todo list
 
 =back
 
@@ -700,7 +812,7 @@ to a value by following it with '='
 
 =item key-value pairs
 
-Examples: vim."read vim-perl help", vim.perl="read vim-perl help"
+examples: vim."read vim-perl help", vim.perl="read vim-perl help"
 
 a key-value pair is a string with two parts separated by a '.'
 adds to a sublist named after the key, creating the sublist if it does
