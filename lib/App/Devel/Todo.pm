@@ -22,28 +22,16 @@ BEGIN {
 
 use feature qw/say/;
 
-use Const::Fast;
 use Cwd qw/cwd/;
 use File::Basename;
-use YAML::XS qw/LoadFile DumpFile Dump/;
+use YAML::XS qw/LoadFile DumpFile/;
 
-# actions the app may take upon the selected todos
+# actions the app may take upon the selected items
 package Action {
-  use Const::Fast;
-
-  const our $DELETE => 0; # remove a todo
-  const our $CREATE => 1; # insert a todo
-  const our $EDIT   => 2; # change the contents of a todo
-  const our $SHOW   => 3; # print information about todo/s
-}
-
-# stati defined in a todos file
-package Status {
-  use Const::Fast;
-
-  const our $TODO => "do";
-  const our $DONE => "did";
-  const our $WANT => "want";
+  our $DELETE = 0; # remove a todo
+  our $CREATE = 1; # insert a todo
+  our $EDIT   = 2; # change the contents of an item
+  our $SHOW   = 3; # print information about items
 }
 
 # config variables always relevant to the program
@@ -54,15 +42,18 @@ our $TODO_FILE    = '';
 # the general action which will be taken by the program
 our $ACTION = $Action::CREATE;
 
+# status selected by the subcommand
+our $STATUS = "do";
+
 # default attributes
-our $DEFAULT_STATUS      = $Status::TODO;
+our $DEFAULT_STATUS      = "do";
 our $DEFAULT_PRIORITY    = 0;
 our $DEFAULT_DESCRIPTION = '';
 
 # attributes given on the command line
-our $STATUS      = '';
-our $PRIORITY    = '';
-our $DESCRIPTION = '';
+our $STATUS_OPT      = '';
+our $PRIORITY_OPT    = '';
+our $DESCRIPTION_OPT = '';
 
 # before creating a new todo, an old one that matches may be moved
 our $MOVE_ENABLED = 1;
@@ -71,16 +62,23 @@ our $MOVE_ENABLED = 1;
 our %OPTS = (
   'help|h'              => \&_help,
   'version|v'           => \&_version,
-  'delete|D'            => sub { $ACTION   = $Action::DELETE; },
-  'create|C'            => sub { $ACTION   = $Action::CREATE; },
-  'edit|E'              => sub { $ACTION   = $Action::EDIT; },
-  'show|S'              => sub { $ACTION   = $Action::SHOW; },
+  'delete|D'            => sub { $ACTION = $Action::DELETE; },
+  'create|C'            => sub { $ACTION = $Action::CREATE; },
+  'edit|E'              => sub { $ACTION = $Action::EDIT; },
+  'show|S'              => sub { $ACTION = $Action::SHOW; },
   'create-no-move|N'    => sub { $ACTION = $Action::CREATE; $MOVE_ENABLED = 0; },
   'config-file|f=s'     => \$CONFIG_FILE,
   'todo-file|t=s'       => \$TODO_FILE,
-  'use-status|s=s'      => \$STATUS,
-  'use-priority|p=s'    => \$PRIORITY,
-  'use-description|d=s' => \$DESCRIPTION
+  'use-status|s=s'      => \$STATUS_OPT,
+  'use-priority|p=s'    => \$PRIORITY_OPT,
+  'use-description|d=s' => \$DESCRIPTION_OPT
+);
+
+our %STATUSES = (
+  all  => 'selects every item regardless of status',
+  do   => 'selects list of todos',
+  did  => 'selects list of finished items',
+  want => 'selects list of goals'
 );
 
 # print a help message appropriate to the situation and exit
@@ -103,19 +101,13 @@ Options:
 -d|--use-description=s set the description used by some actions 
 EOM
 
-  my %h_messages = (
-    $Status::TODO => "selects your todo list",
-    $Status::DONE => "selects your list of finished tasks",
-    $Status::WANT => "selects your list of goals"
-  );
-  
   if ($h_type eq 'a') {
     # general help
     say $h_general_help;
   }
   else {
     # help with subcommand
-    say $h_messages{$DEFAULT_STATUS};
+    say $STATUSES{$STATUS};
   }
 
   exit 0;
@@ -143,14 +135,14 @@ sub get_subcommand {
     elsif ($ARGV[0] eq '-h' || $ARGV[0] eq '--help') {
       _help('a');
     }
-    elsif ($ARGV[0] eq $Status::TODO) {
-      $DEFAULT_STATUS = $Status::TODO;
+    elsif ($ARGV[0] eq "do") {
+      $STATUS = "do";
     }
-    elsif ($ARGV[0] eq $Status::DONE) {
-      $DEFAULT_STATUS = $Status::DONE;
+    elsif ($ARGV[0] eq "did") {
+      $STATUS = "did";
     }
-    elsif ($ARGV[0] eq $Status::WANT) {
-      $DEFAULT_STATUS = $Status::WANT;
+    elsif ($ARGV[0] eq "want") {
+      $STATUS = "want";
     }
     else {
       say "expected subcommand or global option";
@@ -312,7 +304,7 @@ sub create_stuff {
     }
     else {
       say "adding a simple scalar"; #ASSERT
-      # make one item using $STATUS, $PRIORITY, $DESCRIPTION
+      # make one item using $STATUS_OPT, $PRIORITY_OPT, $DESCRIPTION_OPT
       $cs_project->{contents}{$_} = $cs_item;
     }
   }
@@ -327,32 +319,29 @@ sub _cs_mover {
   my ($project, $key) = @_;
 
   if (ref() eq 'HASH') {
-    $project->{contents}{$key}{status} = $DEFAULT_STATUS;
+    $project->{contents}{$key}{status} = $STATUS;
   }
   else {
-    $project->{contents}{$key} = $DEFAULT_STATUS;
+    $project->{contents}{$key} = $STATUS;
   }
 }
 
 sub _cs_maker {
   my $out = {};
 
-  if ($PRIORITY eq '' && $DESCRIPTION eq '') {
-    if ($STATUS eq '') {
-      return $DEFAULT_STATUS;
-    }
-    else {
-      return $STATUS;
-    }
+  if (!defined($PRIORITY_OPT) || !defined($DESCRIPTION_OPT)) {
+    return $DEFAULT_STATUS unless defined $STATUS_OPT;
+
+    return $STATUS_OPT;
   }
-  elsif ($PRIORITY eq '') {
-    $out->{description} = $DESCRIPTION unless ($DESCRIPTION eq '');
+  elsif (!defined($PRIORITY_OPT)) {
+    $out->{description} = $DESCRIPTION_OPT;
   }
-  elsif ($DESCRIPTION eq '') {
-    $out->{priority} = $PRIORITY unless ($PRIORITY eq '');
+  elsif (!defined($DESCRIPTION_OPT)) {
+    $out->{priority} = $PRIORITY_OPT;
   }
   else {
-    $out->{status} = $STATUS unless ($STATUS eq '');
+    $out->{status} = $STATUS_OPT if defined $STATUS_OPT;
   }
   
   return $out;
@@ -415,7 +404,7 @@ sub _es_set_attrs {
 
   my $contents = $list->{contents};
 
-  return if ($STATUS eq '' && $PRIORITY eq '' && $DESCRIPTION eq '');
+  return if ($STATUS_OPT eq '' && $PRIORITY_OPT eq '' && $DESCRIPTION_OPT eq '');
 
   my $replacement = {};
 
@@ -423,16 +412,16 @@ sub _es_set_attrs {
     $replacement = $contents->{$key};
   }
   
-  unless ($STATUS eq '') {
-    $replacement->{status} = $STATUS;
+  unless ($STATUS_OPT eq '') {
+    $replacement->{status} = $STATUS_OPT;
   }
 
-  unless ($PRIORITY eq '') {
-    $replacement->{priority} = $PRIORITY;
+  unless ($PRIORITY_OPT eq '') {
+    $replacement->{priority} = $PRIORITY_OPT;
   }
 
-  unless ($DESCRIPTION eq '') {
-    $replacement->{description} = $DESCRIPTION;
+  unless ($DESCRIPTION_OPT eq '') {
+    $replacement->{description} = $DESCRIPTION_OPT;
   }
 
   $contents->{$key} = $replacement;
@@ -478,7 +467,7 @@ sub _ss_dumper {
       if (_has_contents($v)) {
         _ss_dumper($project, $k);
       }
-      elsif (_has_the_status($v, $DEFAULT_STATUS)) {
+      elsif (_has_the_status($v, $STATUS)) {
         say $k; # TODO show more information about todo, i.e. attributes
       }
     }
@@ -489,7 +478,7 @@ sub _ss_dumper {
     return unless _has_contents($sublist);
 
     while ((my ($k, $v) = each %{ $sublist->{contents} })) {
-      if (_has_the_status($v, $DEFAULT_STATUS)) {
+      if (_has_the_status($v, $STATUS)) {
         unless ($has_printed_key) {
           say $key, ':';
 
@@ -519,7 +508,7 @@ sub delete_stuff {
   }
   else {
     for my $key (keys %{$ds_contents}) {
-      if (_has_the_status($ds_contents->{$key}, $DEFAULT_STATUS)) {
+      if (_has_the_status($ds_contents->{$key}, $STATUS)) {
         delete $ds_contents->{$key};
       }
       elsif (_has_contents($ds_contents->{$key})) {
@@ -539,7 +528,7 @@ sub delete_stuff {
 sub _ds_deleter {
   my ($project, $key) = @_;
 
-  if (_has_the_status($project->{contents}{$key}, $DEFAULT_STATUS)) {
+  if (_has_the_status($project->{contents}{$key}, $STATUS)) {
     delete $project->{contents}{ $key };
   }
 }
