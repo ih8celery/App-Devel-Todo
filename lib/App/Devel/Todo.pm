@@ -12,7 +12,12 @@ BEGIN {
   use Exporter;
 
   our @ISA = qw/Exporter/;
-  our @EXPORT = qw/&run/;
+  our @EXPORT = qw(
+    &run $CONFIG_FILE $TODO_FILE $ACTION $STATUS $MOVE_ENABLED
+    $HELP_REQUESTED &get_possible_subcommand &process_args
+    &configure_app &find_project &create_stuff &edit_stuff
+    &show_stuff &delete_stuff %STATUSES
+  );
 }
 
 use feature qw/say/;
@@ -317,7 +322,7 @@ sub _has_contents {
 sub create_stuff {
   my ($cs_file, $cs_project, $cs_args) = @_;
 
-  _error('cannot create with \'all\' status') if ($STATUS eq 'all');
+  _error("cannot create with \'all\' status") if ($STATUS eq 'all');
 
   my $cs_item = _cs_maker();
   for (@$cs_args) {
