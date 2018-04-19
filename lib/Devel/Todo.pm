@@ -80,39 +80,39 @@ sub isa_todo_list {
 }
 
 # create an item or maybe change an existing one
-sub create_stuff {
-  my ($cs_file, $cs_project, $cs_args) = @_;
+sub add_element {
+  my ($ae_file, $ae_project, $ae_args) = @_;
 
   _error("cannot create with \'all\' status") if ($STATUS eq 'all');
 
-  my $cs_item = _cs_maker();
-  for (@$cs_args) {
+  my $ae_item = _ae_maker();
+  for (@$ae_args) {
     if ($MOVE_ENABLED
-      && _apply_to_matches(\&_cs_mover, $cs_project, $_)) {
+      && _apply_to_matches(\&_ae_mover, $ae_project, $_)) {
 
       next;
     }
     elsif (ref($_) eq 'ARRAY') {
-      my $cs_sublist = $cs_project->{contents}{ $_->[0] };
+      my $ae_sublist = $ae_project->{contents}{ $_->[0] };
 
       # make several items with identical values in a sublist
-      for my $cs_item_name (@{ $_->[1] }) {
-        $cs_sublist->{contents}{$cs_item_name} = $cs_item;
+      for my $ae_item_name (@{ $_->[1] }) {
+        $ae_sublist->{contents}{$ae_item_name} = $ae_item;
       }
     }
     else {
       # make one item using $STATUS_OPT, $PRIORITY_OPT, $DESCRIPTION_OPT
-      $cs_project->{contents}{$_} = $cs_item;
+      $ae_project->{contents}{$_} = $ae_item;
     }
   }
 
-  DumpFile($cs_file, $cs_project);
+  DumpFile($ae_file, $ae_project);
 
   return 0;
 }
 
-# passed to _apply_to_matches by create_stuff to move an item
-sub _cs_mover {
+# passed to _apply_to_matches by add_element to move an item
+sub _ae_mover {
   my ($project, $key) = @_;
 
   if (ref($project->{contents}{$key}) eq 'HASH') {
@@ -124,7 +124,7 @@ sub _cs_mover {
 }
 
 # create a new list item
-sub _cs_maker {
+sub _ae_maker {
   my $out = {};
 
   if (!defined($PRIORITY_OPT) && !defined($DESCRIPTION_OPT)) {
@@ -178,23 +178,23 @@ sub _apply_to_matches {
 }
 
 # change relevant items 
-sub edit_stuff {
-  my ($es_file, $es_project, $es_args) = @_;
+sub edit_element {
+  my ($ee_file, $ee_project, $ee_args) = @_;
   
-  _error('list must have contents') unless (isa_todo_list($es_project));
+  _error('list must have contents') unless (isa_todo_list($ee_project));
   _error('cannot edit with \'all\' status') if ($STATUS eq 'all');
 
-  foreach (@$es_args) {
-    _apply_to_matches(\&_es_set_attrs, $es_project, $_);
+  foreach (@$ee_args) {
+    _apply_to_matches(\&_ee_set_attrs, $ee_project, $_);
   }
 
-  DumpFile($es_file, $es_project);
+  DumpFile($ee_file, $ee_project);
 
   return 0;
 }
 
-# passed to _apply_to_matches by edit_stuff to change items
-sub _es_set_attrs {
+# passed to _apply_to_matches by edit_element to change items
+sub _ee_set_attrs {
   my ($list, $key) = @_;
 
   my $contents = $list->{contents};
@@ -224,28 +224,28 @@ sub _es_set_attrs {
 }
 
 # print information about items in list
-sub show_stuff {
-  my ($ss_project, $ss_args) = @_;
+sub show_element {
+  my ($se_project, $se_args) = @_;
 
-  _error('nothing to show') unless (isa_todo_list($ss_project));
+  _error('nothing to show') unless (isa_todo_list($se_project));
 
-  if (scalar @$ss_args) {
-    foreach (@$ss_args) {
+  if (scalar @$se_args) {
+    foreach (@$se_args) {
       # ignore arrayref args
       if (ref($_) eq '') {
-        _apply_to_matches(\&_ss_dumper, $ss_project, $_);
+        _apply_to_matches(\&_se_dumper, $se_project, $_);
       }
     }
   }
   else {
-    _ss_dumper($ss_project, '');
+    _se_dumper($se_project, '');
   }
 
   return 0;
 }
 
 # print contents of 'list' if items have the right status
-sub _ss_dumper {
+sub _se_dumper {
   my $project = shift;
   my $key     = shift;
 
@@ -257,7 +257,7 @@ sub _ss_dumper {
     # apply the same rule to the ITEMS of a sublist
     while ((my ($k, $v) = each %{ $project->{contents} })) {
       if (isa_todo_list($v)) {
-        _ss_dumper($project, $k);
+        _se_dumper($project, $k);
       }
       elsif (_has_the_status($v, $STATUS)) {
         say $k; # TODO show more information about todo, i.e. attributes
@@ -284,37 +284,37 @@ sub _ss_dumper {
 }
 
 # remove relevant items
-sub delete_stuff {
-  my ($ds_file, $ds_data, $ds_args) = @_;
+sub delete_element {
+  my ($de_file, $de_data, $de_args) = @_;
 
-  _error('nothing to delete') unless (isa_todo_list($ds_data));
+  _error('nothing to delete') unless (isa_todo_list($de_data));
 
-  my $ds_contents = $ds_data->{contents};
-  if (scalar @$ds_args) {
-    foreach (@$ds_args) {
-      _apply_to_matches(\&_ds_deleter, $ds_data, $_);
+  my $de_contents = $de_data->{contents};
+  if (scalar @$de_args) {
+    foreach (@$de_args) {
+      _apply_to_matches(\&_de_deleter, $de_data, $_);
     }
   }
   else {
-    for my $key (keys %{$ds_contents}) {
-      if (_has_the_status($ds_contents->{$key}, $STATUS)) {
-        delete $ds_contents->{$key};
+    for my $key (keys %{$de_contents}) {
+      if (_has_the_status($de_contents->{$key}, $STATUS)) {
+        delete $de_contents->{$key};
       }
-      elsif (isa_todo_list($ds_contents->{$key})) {
-        while ((my ($subkey, $subvalue) = each %{ $ds_contents->{$key}{contents} })) {
-          _ds_deleter($ds_contents->{$key}, $subkey);
+      elsif (isa_todo_list($de_contents->{$key})) {
+        while ((my ($subkey, $subvalue) = each %{ $de_contents->{$key}{contents} })) {
+          _de_deleter($de_contents->{$key}, $subkey);
         }
       }
     }
   }
 
-  DumpFile($ds_file, $ds_data);
+  DumpFile($de_file, $de_data);
 
   return 0;
 }
 
-# passed to _apply_to_matches by delete_stuff to remove an item
-sub _ds_deleter {
+# passed to _apply_to_matches by delete_element to remove an item
+sub _de_deleter {
   my ($project, $key) = @_;
 
   if (_has_the_status($project->{contents}{$key}, $STATUS)) {
