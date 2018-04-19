@@ -80,7 +80,7 @@ sub isa_todo_list {
 }
 
 # create an item or maybe change an existing one
-sub add_element {
+sub Add_Element {
   my ($ae_file, $ae_project, $ae_args) = @_;
 
   _error("cannot create with \'all\' status") if ($STATUS eq 'all');
@@ -178,7 +178,7 @@ sub _apply_to_matches {
 }
 
 # change relevant items 
-sub edit_element {
+sub Edit_Element {
   my ($ee_file, $ee_project, $ee_args) = @_;
   
   _error('list must have contents') unless (isa_todo_list($ee_project));
@@ -224,7 +224,7 @@ sub _ee_set_attrs {
 }
 
 # print information about items in list
-sub show_element {
+sub Show_Element {
   my ($se_project, $se_args) = @_;
 
   _error('nothing to show') unless (isa_todo_list($se_project));
@@ -284,7 +284,7 @@ sub _se_dumper {
 }
 
 # remove relevant items
-sub delete_element {
+sub Delete_Element {
   my ($de_file, $de_data, $de_args) = @_;
 
   _error('nothing to delete') unless (isa_todo_list($de_data));
