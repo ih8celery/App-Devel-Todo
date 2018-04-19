@@ -13,7 +13,7 @@ use feature qw/say/;
 use File::Spec::Functions;
 use YAML::XS qw/LoadFile DumpFile/;
 
-our $VERSION      = '0.05';
+our $VERSION = '0.05';
 
 # construct a new Devel::Todo object
 sub new {
@@ -30,28 +30,28 @@ sub new {
 
 # does list item have a status?
 sub _has_the_status {
-  my ($item, $status) = @_;
+  my ($elem, $status) = @_;
 
   return 1 if ($STATUS eq 'all');
 
-  if (ref($item) eq "HASH") {
-    if (exists $item->{status} && defined $item->{status}) {
-      return ($status eq $item->{status});
+  if (ref($elem) eq "HASH") {
+    if (exists $elem->{status} && defined $elem->{status}) {
+      return ($status eq $elem->{status});
     }
     else {
       return ($DEFAULT_STATUS eq $status);
     }
   }
   else {
-    return ($status eq $item);
+    return ($status eq $elem);
   }
 }
 
 # does todo list have item named after key?
 sub has_elem {
-  my ($project, $key) = @_;
+  my ($he_self, $he_key) = @_;
 
-  return (exists $project->{contents}{$key});
+  return (exists $he_self->{PROJECT}{contents}{$key});
 }
 
 # is scalar a todo list?
@@ -135,7 +135,7 @@ sub _apply_to_matches {
   my $key   = shift;
 
   if (ref($key) eq 'ARRAY') {
-    return 0 unless has_elem($start, $key->[0]);
+    return 0 unless $atm_self->has_elem($atm_key->[0]);
 
     my $count   = 0;
     my $sublist = $start->{contents}{ $key->[0] };
@@ -152,7 +152,7 @@ sub _apply_to_matches {
     }
   }
   else {
-    return 0 unless has_elem($start, $key);
+    return 0 unless $atm_self->has_elem($atm_key);
 
     &{ $sub }($start, $key);
   }
