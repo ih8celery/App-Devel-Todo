@@ -12,7 +12,7 @@ BEGIN {
   use Exporter;
 
   our @ISA = qw/Exporter/;
-  our @EXPORT = qw/&run/;
+  our @EXPORT = qw/&Run/;
 }
 
 use Devel::Todo;
@@ -57,7 +57,7 @@ Getopt::Long::Configure('no_ignore_case');
 # declare command-line options
 our %OPTS = (
   'help|h'              => sub { $HELP_REQUESTED = 1; },
-  'version|v'           => \&_version,
+  'version|v'           => \&version,
   'delete|D'            => sub { $ACTION = $Action::DELETE; },
   'create|C'            => sub { $ACTION = $Action::CREATE; },
   'edit|E'              => sub { $ACTION = $Action::EDIT; },
@@ -78,9 +78,9 @@ our %STATUSES = (
 );
 
 # print a help message appropriate to the situation and exit
-sub _help {
+sub help {
   my $h_type = shift || 's';
-  my $h_general_help = <<EOM;
+  my $h_generalhelp = <<EOM;
 Options:
 -h|--help              print help
 -v|--version           print application version information
@@ -97,7 +97,7 @@ Options:
 EOM
 
   if ($h_type eq 'a') {
-    say $h_general_help;
+    say $h_generalhelp;
   }
   else {
     say $STATUSES{$STATUS};
@@ -107,7 +107,7 @@ EOM
 }
 
 # print the application name and version number and exit
-sub _version {
+sub version {
   say "todo $VERSION";
 
   exit 0;
@@ -119,20 +119,20 @@ sub get_possible_subcommand {
   my $gs_STATUS;
 
   if ($gs_num_args == 0) {
-    _help('a');
+    help('a');
   }
   else {
     if ($ARGV[0] eq '-v' || $ARGV[0] eq '--version') {
-      _version();
+      version();
     }
     elsif ($ARGV[0] eq '-h' || $ARGV[0] eq '--help') {
-      _help('a');
+      help('a');
     }
     elsif ($ARGV[0] =~ m/\w[\w\-\+\.\/]*/) {
       $gs_STATUS = $ARGV[0];
     }
     else {
-      die("expected subcommand or global option");
+      return '';
     }
   }
 
@@ -194,7 +194,7 @@ sub process_args {
       next;
     }
 
-    die("arg $_ is invalid");
+    return ();
   }
 
   if ($pa_count) {
@@ -208,7 +208,6 @@ sub process_args {
 # TODO
 sub configure_app {
   my ($ca_file) = @_;
-  die('config file not found') unless -f $ca_file;
 
   my $ca_settings = LoadFile($ca_file);
   
@@ -220,16 +219,17 @@ sub configure_app {
           $STATUSES{$_} = $ca_settings->{statuses}{$_};
         }
         else {
-          die('new status must be created with a help message');
+          return (0, "new status $_ is missing help message");
         }
       }
       else {
-        die('new status must match \'\\w[\\w\\-\\+\\.\\/]*\' and not already exist');
+        return (0, "new status $_ already exists or is invalid");
       }
     }
   }
 
   # set defaults, if any
+  return (1, '');
 }
 
 # search recursively upward from the current directory for todos
@@ -250,20 +250,22 @@ sub find_project {
     }
   }
   
-  die('no project file found') unless (-f $fp_file);
-
   return $fp_file;
 }
 
 # main application logic
-sub run {
-  my ($r_STATUS, $r_project_file, $r_todos);
+sub Run {
+  my ($r_STATUS, $r_project_file, $r_todos, $r_ok, $r_error);
   my @r_args;
 
   # the possible subcommand retrieved here will be verified
   # after the config file has been processed, since status/
   # subcommand may be defined there
   $r_STATUS = get_possible_subcommand();
+  if ($r_STATUS eq '') {
+    die "error: expected global option or subcommand";
+  }
+
   shift @ARGV;
 
   exit 1 unless GetOptions(%OPTS);
@@ -271,14 +273,15 @@ sub run {
   # reads the configuration file, sets new app defaults if any
   # defined, and creates new subcommands/statuses. if any of the
   # latter are invalid for some reason, they will be ignored
-  configure_app($CONFIG_FILE);
+  ($r_ok, $r_error) = configure_app($CONFIG_FILE);
+  die $r_error unless $r_ok;
 
   # verify the possible subcommand
   if (exists $STATUSES{$r_STATUS}) {
     $STATUS = $r_STATUS;
   }
   else {
-    die("unknown subcommand: $r_STATUS");
+    die("error: unknown subcommand: $r_STATUS");
   }
 
   $DEFAULT_STATUS = $STATUS unless ($STATUS eq 'all');
@@ -286,13 +289,19 @@ sub run {
   # prints help for subcommand
   # this function is called here because not all subcommands
   # may be known until after the app is configured
-  _help('s') if $HELP_REQUESTED;
+  help('s') if $HELP_REQUESTED;
 
   # processes remaining command-line arguments into keys and values
   # so that it is clear which parts of the 'lists' will be affected
   @r_args = process_args();
+  unless (@r_args) {
+    die "error: invalid args to program";
+  }
 
   $r_project_file = find_project();
+  unless (-f $r_project_file) {
+    die "error: unable to find project file";
+  }
 
   $r_todos = LoadFile($r_project_file);
 
