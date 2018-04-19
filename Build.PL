@@ -10,16 +10,24 @@ use warnings;
 use Module::Build;
 
 my $build = Module::Build->new(
-  dist_version  => '0.05',
-  dist_abstract => 'META.yml',
-  module_name   => 'App::Devel::Todo',
-  install_path  => { conf => "$ENV{HOME}/bin" },
-  requires      => {
+  dist_version   => '0.05',
+  dist_abstract  => 'META.yml',
+  dist_author    => 'Adam Marshall',
+  module_name    => 'App::Devel::Todo',
+  requires       => {
     'Getopt::Long' => '2.5',
     'Cwd'          => '0',
     'YAML::XS'     => '0'
   },
-  license       => 'MIT'
+  build_requires => {
+    'Module::Build' => '>0.2'
+  },
+  test_requires  => {
+    'Test::More' => '>0.9',
+    'YAML::XS'   => '0'
+  },
+  create_license => 1,
+  license        => 'mit'
 );
 
 $build->create_build_script;
