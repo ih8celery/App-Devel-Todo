@@ -13,37 +13,20 @@ use feature qw/say/;
 use File::Spec::Functions;
 use YAML::XS qw/LoadFile DumpFile/;
 
-# actions the app may take upon the selected items
-package Action {
-  our $DELETE = 0; # remove a todo
-  our $CREATE = 1; # insert a todo
-  our $EDIT   = 2; # change the contents of an item
-  our $SHOW   = 3; # print information about items
-}
-
-# config variables always relevant to the program
 our $VERSION      = '0.05';
-our $CONFIG_FILE  = "$ENV{HOME}/.todorc.yml";
-our $TODO_FILE    = '';
 
-# the general action which will be taken by the program
-our $ACTION = $Action::CREATE;
+# construct a new Devel::Todo object
+sub new {
+  my ($n_class, $n_todo_file, $n_config) = @_;
 
-# status selected by the subcommand
-our $STATUS = 'do';
+  my $n_self = {
+    TODO_FILE => $n_todo_file,
+    PROJECT   => LoadFile($n_todo_file),
+    STATE     => $n_config,
+  };
 
-# default attributes
-our $DEFAULT_STATUS      = 'do';
-our $DEFAULT_PRIORITY    = 0;
-our $DEFAULT_DESCRIPTION = '';
-
-# attributes given on the command line
-our $STATUS_OPT;
-our $PRIORITY_OPT;
-our $DESCRIPTION_OPT;
-
-# before creating a new todo, an old one that matches may be moved
-our $MOVE_ENABLED = 1;
+  bless $n_self, $n_class;
+}
 
 # does list item have a status?
 sub _has_the_status {
