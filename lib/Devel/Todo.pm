@@ -97,12 +97,20 @@ sub Add_Element {
       next;
     }
     elsif (ref($_) eq 'ARRAY') {
-      my $ae_sublist = $ae_self->{PROJECT}{contents}{ $_->[0] };
+      unless (defined $ae_self->{PROJECT}{contents}{ $_->[0] }) {
+        $ae_self->{PROJECT}{contents}{ $_->[0] } = {
+          contents => {}
+        };
+      }
 
+      my $ae_sublist = $ae_self->{PROJECT}{contents}{ $_->[0] };
+      
       # make several items with identical attributes in a sublist
       for my $ae_item_name (@{ $_->[1] }) {
         $ae_sublist->{contents}{$ae_item_name} = $ae_item;
       }
+
+      say Dump $ae_sublist; #ASSERT
     }
     else {
       $ae_self->{PROJECT}{contents}{$_} = $ae_item;
