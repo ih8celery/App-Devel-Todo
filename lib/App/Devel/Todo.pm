@@ -52,12 +52,14 @@ our $DT_CONFIG = {
   DEFAULT_STATUS      => 'do',
   DEFAULT_PRIORITY    => 0,
   DEFAULT_DESCRIPTION => '',
+  VERBOSE             => 0,
 };
 
 # declare command-line options
 our %OPTS = (
   'help|h'              => sub { $HELP_REQUESTED = 1; },
   'version|v'           => \&version,
+  'verbose|V'           => sub { $DT_CONFIG->{VERBOSE} = 1; },
   'delete|D'            => sub { $ACTION = $DELETE; },
   'create|C'            => sub { $ACTION = $CREATE; },
   'edit|E'              => sub { $ACTION = $EDIT; },
@@ -86,6 +88,7 @@ sub help {
 Options:
 -h|--help              print help
 -v|--version           print application version information
+-V|--verbose           print every item with its description
 -S|--show              print item/s from the currently selected list
 -E|--edit              change list item information
 -C|--create            add new item/s to selected list or move from another list
@@ -476,6 +479,10 @@ subcommand
 =item -v|--version
 
 print application version information
+
+=item -V|--verbose
+
+print every item with its description
 
 =item -S|--show
 
