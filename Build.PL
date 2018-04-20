@@ -15,7 +15,7 @@ my $build = Module::Build->new(
   dist_author    => 'Adam Marshall',
   module_name    => 'App::Devel::Todo',
   requires       => {
-    'Getopt::Long' => '2.5',
+    'Getopt::Long' => '>2.24',
     'Cwd'          => '0',
     'YAML::XS'     => '0'
   },
