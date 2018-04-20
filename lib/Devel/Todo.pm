@@ -86,7 +86,7 @@ sub Add_Element {
   my ($ae_self, $ae_args) = @_;
 
   if ($ae_self->{SETTINGS}{STATUS} eq 'all') {
-    _error("cannot create with \'all\' status");
+    die("error: cannot create with \'all\' status");
   }
 
   my $ae_item = _ae_maker($ae_self->{SETTINGS});
@@ -186,18 +186,18 @@ sub Edit_Element {
   my ($ee_self, $ee_args) = @_;
   
   unless (isa_list($ee_self->{PROJECT})) {
-    _error('no todo list to work on');
+    die('error: no todo list to work on');
   }
 
   if ($ee_self->{SETTINGS}{STATUS} eq 'all') {
-    _error("cannot edit with \'all\' status");
+    die("error: cannot edit with \'all\' status");
   }
 
   foreach (@$ee_args) {
     $ee_self->apply_to_matches(\&_ee_set_attrs, $_);
   }
 
-  DumpFile($ee_self->{TODO_FILE}, $ee_self->{PROJECT});
+  DumpFile($ee_self->{TODO_FILE}, $ee_self->{SETTINGS}, $ee_self->{PROJECT});
 
   return 0;
 }
@@ -237,7 +237,7 @@ sub _ee_set_attrs {
 sub Show_Element {
   my ($se_self, $se_args) = @_;
 
-  _error('nothing to show') unless (isa_list($se_self->{PROJECT}));
+  die('error: nothing to show') unless (isa_list($se_self->{PROJECT}));
 
   if (scalar @$se_args) {
     foreach (@$se_args) {
@@ -248,7 +248,7 @@ sub Show_Element {
     }
   }
   else {
-    _se_dumper($se_self->{PROJECT}, '');
+    _se_dumper($se_self->{PROJECT}, $se_self->{SETTINGS}, '');
   }
 
   return 0;
@@ -306,7 +306,7 @@ sub _se_dumper {
 sub Delete_Element {
   my ($de_self, $de_args) = @_;
 
-  _error('nothing to delete') unless isa_list($de_self->{PROJECT});
+  die('error: nothing to delete') unless isa_list($de_self->{PROJECT});
 
   my $de_contents = $de_self->{PROJECT}{contents};
   if (scalar @$de_args) {
@@ -326,7 +326,7 @@ sub Delete_Element {
       }
       elsif (isa_list($de_contents->{$key})) {
         while ((my ($subkey, $subvalue) = each %{ $de_contents->{$key}{contents} })) {
-          _de_deleter($de_contents->{$key}, $subkey);
+          _de_deleter($de_contents->{$key}, $de_self->{SETTINGS}, $subkey);
         }
       }
     }
