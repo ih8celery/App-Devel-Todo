@@ -61,7 +61,7 @@ sub _has_the_status {
 sub has_elem {
   my ($he_self, $he_key) = @_;
 
-  return (exists $he_self->{PROJECT}{contents}{$key});
+  return (exists $he_self->{PROJECT}{contents}{$he_key});
 }
 
 # does todo list have a sublist with an item named after key
@@ -172,7 +172,7 @@ sub apply_to_matches {
       return $atm_count;
     }
   }
-  elsif ($self->has_elem($atm_key)) {
+  elsif ($atm_self->has_elem($atm_key)) {
     &{ $atm_sub }($atm_self->{PROJECT}, $atm_self->{SETTINGS}, $atm_key);
     
     return 1;
@@ -185,7 +185,7 @@ sub apply_to_matches {
 sub Edit_Element {
   my ($ee_self, $ee_args) = @_;
   
-  unless isa_list($ee_self->{PROJECT}) {
+  unless (isa_list($ee_self->{PROJECT})) {
     _error('no todo list to work on');
   }
 

@@ -102,7 +102,7 @@ EOM
     say $h_generalhelp;
   }
   else {
-    say $STATUSES{ $DT_STATUS->{STATUS} };
+    say $STATUSES{ $DT_CONFIG->{STATUS} };
   }
 
   exit 0;
@@ -329,7 +329,7 @@ sub Run {
     die "error: unable to find project file";
   }
 
-  $r_todo = Devel::Todo->new($r_project_file, $DT_CONFIG);
+  my $r_todo = Devel::Todo->new($r_project_file, $DT_CONFIG);
 
   if ($ACTION == $CREATE) {
     $r_todo->Add_Element(\@r_args);
