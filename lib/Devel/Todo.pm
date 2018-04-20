@@ -32,8 +32,6 @@ sub new {
       PRIORITY_OPT        => $n_config->{PRIORITY_OPT},
       DESCRIPTION_OPT     => $n_config->{DESCRIPTION_OPT},
       MOVE_ENABLED        => $n_config->{MOVE_ENABLED} || 1,
-      STATUSES            => $n_config->{STATUSES}
-          || die "no statuses defined",
     },
   };
 
