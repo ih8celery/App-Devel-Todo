@@ -212,18 +212,18 @@ sub process_args {
       next;
     }
 
-    return ();
+    return ([], 0);
   }
 
   if ($pa_sublist_count) {
     push @pa_out, [$pa_sublist_key, $pa_sublist_blob];
   }
 
-  return @pa_out;
+  return (\@pa_out, 1);
 }
 
 # load the global configuration file settings
-# TODO
+# TODO setting default values
 sub configure_app {
   my ($ca_file) = @_;
 
@@ -319,8 +319,9 @@ sub Run {
 
   # processes remaining command-line arguments into keys and values
   # so that it is clear which parts of the todos will be affected
-  my @r_args = process_args();
-  unless (@r_args) {
+  my $r_args;
+  ($r_args, $r_ok) = process_args();
+  unless ($r_ok) {
     die "error: invalid args to program";
   }
 
@@ -332,16 +333,16 @@ sub Run {
   my $r_todo = Devel::Todo->new($r_project_file, $DT_CONFIG);
 
   if ($ACTION == $CREATE) {
-    $r_todo->Add_Element(\@r_args);
+    $r_todo->Add_Element($r_args);
   }
   elsif ($ACTION == $SHOW) {
-    $r_todo->Show_Element(\@r_args);
+    $r_todo->Show_Element($r_args);
   }
   elsif ($ACTION == $EDIT) {
-    $r_todo->Edit_Element(\@r_args);
+    $r_todo->Edit_Element($r_args);
   }
   elsif ($ACTION == $DELETE) {
-    $r_todo->Delete_Element(\@r_args);
+    $r_todo->Delete_Element($r_args);
   }
 }
 
