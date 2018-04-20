@@ -183,7 +183,7 @@ sub process_args {
     # reset $key and add current blob unless empty
     if (m/^\s*(.+?)\.(.+)\s*$/) {
       if ($pa_sublist_key ne $1) {
-        if ($pa_sublist_key > 0) {
+        if ($pa_sublist_count > 0) {
           push @pa_out, [$pa_sublist_key, $pa_sublist_blob];
         }
       }
