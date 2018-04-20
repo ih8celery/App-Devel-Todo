@@ -8,4 +8,4 @@ use strict;
 use warnings;
 
 use App::Devel::Todo;
-run();
+Run();
