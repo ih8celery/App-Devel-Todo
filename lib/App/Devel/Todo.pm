@@ -19,29 +19,40 @@ use Devel::Todo;
 
 use feature qw/say/;
 
+use File::Spec::Functions;
 use Getopt::Long;
 use Cwd qw/getcwd/;
 use File::Basename;
 use YAML::XS qw/LoadFile/;
 
 # config variables always relevant to the program
-our $VERSION      = '0.005000';
-our $CONFIG_FILE  = "$ENV{HOME}/.todorc.yml";
-our $TODO_FILE    = '';
+our $VERSION     = '0.005000';
+our $CONFIG_FILE = "$ENV{HOME}/.todorc.yml";
+
+# define actions
+our $CREATE = 0;
+our $SHOW   = 1;
+our $EDIT   = 2;
+our $DELETE = 3;
 
 # the general action which will be taken by the program
-our $ACTION = $Action::CREATE;
-
-# status selected by the subcommand
-our $STATUS = 'do';
-
-# default attributes
-our $DEFAULT_STATUS      = 'do';
-our $DEFAULT_PRIORITY    = 0;
-our $DEFAULT_DESCRIPTION = '';
+our $ACTION = $CREATE;
 
 # controls whether a help message will be printed for subcommand
 our $HELP_REQUESTED = 0;
+
+# configuration passed to Devel::Todo->new
+our $DT_CONFIG = {
+  STATUS              => 'do',
+  MOVE_ENABLED        => 1,
+  TODO_FILE           => '',
+  STATUS_OPT          => undef,
+  PRIORITY_OPT        => undef,
+  DESCRIPTION_OPT     => undef,
+  DEFAULT_STATUS      => 'do',
+  DEFAULT_PRIORITY    => 0,
+  DEFAULT_DESCRIPTION => '',
+};
 
 # options are case-sensitive
 Getopt::Long::Configure('no_ignore_case');
@@ -50,16 +61,16 @@ Getopt::Long::Configure('no_ignore_case');
 our %OPTS = (
   'help|h'              => sub { $HELP_REQUESTED = 1; },
   'version|v'           => \&version,
-  'delete|D'            => sub { $ACTION = $Action::DELETE; },
-  'create|C'            => sub { $ACTION = $Action::CREATE; },
-  'edit|E'              => sub { $ACTION = $Action::EDIT; },
-  'show|S'              => sub { $ACTION = $Action::SHOW; },
-  'create-no-move|N'    => sub { $ACTION = $Action::CREATE; $MOVE_ENABLED = 0; },
+  'delete|D'            => sub { $ACTION = $DELETE; },
+  'create|C'            => sub { $ACTION = $CREATE; },
+  'edit|E'              => sub { $ACTION = $EDIT; },
+  'show|S'              => sub { $ACTION = $SHOW; },
+  'create-no-move|N'    => sub { $ACTION = $CREATE; $DT_CONFIG->{MOVE_ENABLED} = 0; },
   'config-file|f=s'     => \$CONFIG_FILE,
-  'todo-file|t=s'       => \$TODO_FILE,
-  'use-status|s=s'      => \$STATUS_OPT,
-  'use-priority|p=s'    => \$PRIORITY_OPT,
-  'use-description|d=s' => \$DESCRIPTION_OPT
+  'todo-file|t=s'       => \$DT_CONFIG->{TODO_FILE},
+  'use-status|s=s'      => \$DT_CONFIG->{STATUS_OPT},
+  'use-priority|p=s'    => \$DT_CONFIG->{PRIORITY_OPT},
+  'use-description|d=s' => \$DT_CONFIG->{DESCRIPTION_OPT}
 );
 
 our %STATUSES = (
@@ -92,7 +103,7 @@ EOM
     say $h_generalhelp;
   }
   else {
-    say $STATUSES{$STATUS};
+    say $STATUSES{ $DT_STATUS->{STATUS} };
   }
 
   exit 0;
@@ -124,15 +135,17 @@ sub get_possible_subcommand {
       $gs_STATUS = $ARGV[0];
     }
     else {
-      return '';
+      return ('', 0);
     }
+
+    shift @ARGV;
   }
 
   if ($gs_num_args == 1) {
-    $ACTION = $Action::SHOW;
+    $ACTION = $SHOW;
   }
 
-  return $gs_STATUS;
+  return ($gs_STATUS, 1);
 }
 
 # process non-option arguments into a list of keys and values
@@ -227,7 +240,7 @@ sub configure_app {
 # search recursively upward from the current directory for todos
 # until any project or the home directory is found
 sub find_project {
-  my $fp_dir = getcwd;
+  my $fp_dir  = getcwd;
   my $fp_file = $fp_dir . '/' . '.todos';
 
   if ($fp_dir !~ /^$ENV{HOME}/) {
@@ -247,36 +260,36 @@ sub find_project {
 
 # main application logic
 sub Run {
-  my ($r_STATUS, $r_project_file, $r_todos, $r_ok, $r_error);
-  my @r_args;
-
   # the possible subcommand retrieved here will be verified
   # after the config file has been processed, since status/
   # subcommand may be defined there
-  $r_STATUS = get_possible_subcommand();
-  if ($r_STATUS eq '') {
+  my ($r_STATUS, $r_ok) = get_possible_subcommand();
+  unless ($r_ok) {
     die "error: expected global option or subcommand";
   }
 
-  shift @ARGV;
-
-  exit 1 unless GetOptions(%OPTS);
+  unless (GetOptions(%OPTS)) {
+    exit 1;
+  }
 
   # reads the configuration file, sets new app defaults if any
   # defined, and creates new subcommands/statuses. if any of the
   # latter are invalid for some reason, they will be ignored
+  my $r_error;
   ($r_ok, $r_error) = configure_app($CONFIG_FILE);
   die $r_error unless $r_ok;
 
   # verify the possible subcommand
   if (exists $STATUSES{$r_STATUS}) {
-    $STATUS = $r_STATUS;
+    $DT_CONFIG->{STATUS} = $r_STATUS;
   }
   else {
     die("error: unknown subcommand: $r_STATUS");
   }
 
-  $DEFAULT_STATUS = $STATUS unless ($STATUS eq 'all');
+  unless ($DT_CONFIG->{STATUS} eq 'all') {
+    $DT_CONFIG->{DEFAULT_STATUS} = $DT_CONFIG->{STATUS};
+  }
   
   # prints help for subcommand
   # this function is called here because not all subcommands
@@ -285,29 +298,29 @@ sub Run {
 
   # processes remaining command-line arguments into keys and values
   # so that it is clear which parts of the 'lists' will be affected
-  @r_args = process_args();
+  my @r_args = process_args();
   unless (@r_args) {
     die "error: invalid args to program";
   }
 
-  $r_project_file = find_project();
+  my $r_project_file = find_project();
   unless (-f $r_project_file) {
     die "error: unable to find project file";
   }
 
-  $r_todos = LoadFile($r_project_file);
+  $r_todo = Devel::Todo->new($r_project_file, $DT_CONFIG);
 
-  if ($ACTION == $Action::CREATE) {
-    create_stuff($r_project_file, $r_todos, \@r_args);
+  if ($ACTION == $CREATE) {
+    $r_todo->Add_Element(\@r_args);
   }
-  elsif ($ACTION == $Action::SHOW) {
-    show_stuff($r_todos, \@r_args);
+  elsif ($ACTION == $SHOW) {
+    $r_todo->Show_Element(\@r_args);
   }
-  elsif ($ACTION == $Action::EDIT) {
-    edit_stuff($r_project_file, $r_todos, \@r_args);
+  elsif ($ACTION == $EDIT) {
+    $r_todo->Edit_Element(\@r_args);
   }
-  elsif ($ACTION == $Action::DELETE) {
-    delete_stuff($r_project_file, $r_todos, \@r_args);
+  elsif ($ACTION == $DELETE) {
+    $r_todo->Delete_Element(\@r_args);
   }
 }
 
