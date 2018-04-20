@@ -18,4 +18,4 @@ dynamic_config: 1
 resources:
   repository: https://github.com/ih8celery/App-Devel-Todo.git
 license: 'MIT'
-version: '0.05'
+version: '0.005000'

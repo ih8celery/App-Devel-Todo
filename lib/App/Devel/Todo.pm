@@ -25,7 +25,7 @@ use File::Basename;
 use YAML::XS qw/LoadFile/;
 
 # config variables always relevant to the program
-our $VERSION      = '0.05';
+our $VERSION      = '0.005000';
 our $CONFIG_FILE  = "$ENV{HOME}/.todorc.yml";
 our $TODO_FILE    = '';
 
@@ -39,14 +39,6 @@ our $STATUS = 'do';
 our $DEFAULT_STATUS      = 'do';
 our $DEFAULT_PRIORITY    = 0;
 our $DEFAULT_DESCRIPTION = '';
-
-# attributes given on the command line
-our $STATUS_OPT;
-our $PRIORITY_OPT;
-our $DESCRIPTION_OPT;
-
-# before creating a new todo, an old one that matches may be moved
-our $MOVE_ENABLED = 1;
 
 # controls whether a help message will be printed for subcommand
 our $HELP_REQUESTED = 0;
