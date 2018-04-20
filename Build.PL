@@ -10,7 +10,7 @@ use warnings;
 use Module::Build;
 
 my $build = Module::Build->new(
-  dist_version   => '0.005000',
+  dist_version   => '0.005002',
   dist_abstract  => 'META.yml',
   dist_author    => 'Adam Marshall',
   module_name    => 'App::Devel::Todo',

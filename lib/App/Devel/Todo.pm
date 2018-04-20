@@ -26,7 +26,7 @@ use YAML::XS qw/LoadFile/;
 use Devel::Todo;
 
 # config variables always relevant to the program
-our $VERSION     = '0.005000';
+our $VERSION     = '0.005002';
 our $CONFIG_FILE = catfile($ENV{HOME}, '.todorc.yml');
 
 # define actions
