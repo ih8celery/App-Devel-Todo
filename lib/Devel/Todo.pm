@@ -12,7 +12,7 @@ use feature qw/say/;
 
 use YAML::XS qw/LoadFile DumpFile Dump/;
 
-our $VERSION = '0.005000';
+our $VERSION = '0.006000';
 
 # construct a new Devel::Todo object
 sub new {
