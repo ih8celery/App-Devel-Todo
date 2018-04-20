@@ -10,7 +10,6 @@ use warnings;
 
 use feature qw/say/;
 
-use File::Spec::Functions;
 use YAML::XS qw/LoadFile DumpFile/;
 
 our $VERSION = '0.05';
@@ -22,7 +21,20 @@ sub new {
   my $n_self = {
     TODO_FILE => $n_todo_file,
     PROJECT   => LoadFile($n_todo_file),
-    STATE     => $n_config,
+    SETTINGS  => {
+      STATUS              => $n_config->{STATUS}
+          || die "no status given",
+      DEFAULT_STATUS      => $n_config->{DEFAULT_STATUS}
+          || die "no default status given",
+      DEFAULT_PRIORITY    => $n_config->{DEFAULT_PRIORITY} || 0,
+      DEFAULT_DESCRIPTION => $n_config->{DEFAULT_DESCRIPTION} || '',
+      STATUS_OPT          => $n_config->{STATUS_OPT},
+      PRIORITY_OPT        => $n_config->{PRIORITY_OPT},
+      DESCRIPTION_OPT     => $n_config->{DESCRIPTION_OPT},
+      MOVE_ENABLED        => $n_config->{MOVE_ENABLED} || 1,
+      STATUSES            => $n_config->{STATUSES}
+          || die "no statuses defined",
+    },
   };
 
   bless $n_self, $n_class;
@@ -30,20 +42,20 @@ sub new {
 
 # does list item have a status?
 sub _has_the_status {
-  my ($elem, $status) = @_;
+  my ($elem, $cmp_status, $status, $default_status) = @_;
 
-  return 1 if ($STATUS eq 'all');
+  return 1 if ($status eq 'all');
 
   if (ref($elem) eq "HASH") {
     if (exists $elem->{status} && defined $elem->{status}) {
-      return ($status eq $elem->{status});
+      return ($cmp_status eq $elem->{status});
     }
     else {
-      return ($DEFAULT_STATUS eq $status);
+      return ($default_status eq $cmp_status);
     }
   }
   else {
-    return ($status eq $elem);
+    return ($cmp_status eq $elem);
   }
 }
 
@@ -54,6 +66,7 @@ sub has_elem {
   return (exists $he_self->{PROJECT}{contents}{$key});
 }
 
+# does todo list have a sublist with an item named after key
 sub has_sublist_elem {
   my ($hse_self, $hse_subkey, $hse_key) = @_;
   my $hse_list = $hse_self->{PROJECT}{contents};
@@ -63,7 +76,7 @@ sub has_sublist_elem {
 }
 
 # is scalar a todo list?
-sub isa_sublist {
+sub isa_list {
   my ($val) = @_;
 
   return (ref($val) eq 'HASH' && exists $val->{contents}
@@ -72,65 +85,70 @@ sub isa_sublist {
 
 # create an item or maybe change an existing one
 sub Add_Element {
-  my ($ae_file, $ae_project, $ae_args) = @_;
+  my ($ae_self, $ae_args) = @_;
 
-  _error("cannot create with \'all\' status") if ($STATUS eq 'all');
+  if ($ae_self->{SETTINGS}{STATUS} eq 'all') {
+    _error("cannot create with \'all\' status");
+  }
 
-  my $ae_item = _ae_maker();
+  my $ae_item = _ae_maker($ae_self->{SETTINGS});
   for (@$ae_args) {
-    if ($MOVE_ENABLED
-      && apply_to_matches(\&_ae_mover, $ae_project, $_)) {
+    if ($ae_self->{SETTINGS}{MOVE_ENABLED}
+      && $ae_self->apply_to_matches(\&_ae_mover, $_)) {
 
       next;
     }
     elsif (ref($_) eq 'ARRAY') {
-      my $ae_sublist = $ae_project->{contents}{ $_->[0] };
+      my $ae_sublist = $ae_self->{PROJECT}{contents}{ $_->[0] };
 
-      # make several items with identical values in a sublist
+      # make several items with identical attributes in a sublist
       for my $ae_item_name (@{ $_->[1] }) {
         $ae_sublist->{contents}{$ae_item_name} = $ae_item;
       }
     }
     else {
-      # make one item using $STATUS_OPT, $PRIORITY_OPT, $DESCRIPTION_OPT
-      $ae_project->{contents}{$_} = $ae_item;
+      $ae_self->{PROJECT}{contents}{$_} = $ae_item;
     }
   }
 
-  DumpFile($ae_file, $ae_project);
+  DumpFile($ae_self->{TODO_FILE}, $ae_self->{PROJECT});
 
   return 0;
 }
 
 # passed to apply_to_matches by add_element to move an item
 sub _ae_mover {
-  my ($project, $key) = @_;
+  my ($project, $settings, $key) = @_;
 
   if (ref($project->{contents}{$key}) eq 'HASH') {
-    $project->{contents}{$key}{status} = $STATUS;
+    $project->{contents}{$key}{status} = $settings->{STATUS};
   }
   else {
-    $project->{contents}{$key} = $STATUS;
+    $project->{contents}{$key} = $settings->{STATUS};
   }
 }
 
 # create a new list item
 sub _ae_maker {
+  my ($settings) = @_;
   my $out = {};
 
-  if (!defined($PRIORITY_OPT) && !defined($DESCRIPTION_OPT)) {
-    return $DEFAULT_STATUS unless defined $STATUS_OPT;
+  if (!defined($settings->{PRIORITY_OPT})
+    && !defined($settings->{DESCRIPTION_OPT})) {
+    
+    return $settings->{DEFAULT_STATUS}
+        unless defined $settings->{STATUS_OPT};
 
-    return $STATUS_OPT;
+    return $settings->{STATUS_OPT};
   }
-  elsif (!defined($PRIORITY_OPT)) {
-    $out->{description} = $DESCRIPTION_OPT;
+  elsif (!defined($settings->{PRIORITY_OPT})) {
+    $out->{description} = $settings->{DESCRIPTION_OPT};
   }
-  elsif (!defined($DESCRIPTION_OPT)) {
-    $out->{priority} = $PRIORITY_OPT;
+  elsif (!defined($settings->{DESCRIPTION_OPT})) {
+    $out->{priority} = $settings->{PRIORITY_OPT};
   }
-  else {
-    $out->{status} = $STATUS_OPT if defined $STATUS_OPT;
+  elsif (defined $settings->{STATUS_OPT}) {
+    $out->{status} = $settings->{STATUS_OPT};
   }
   
   return $out;
@@ -146,10 +164,10 @@ sub apply_to_matches {
     my $atm_count   = 0;
     my $atm_sublist = $atm_self->{PROJECT}{contents}{ $atm_key->[0] };
 
-    if (isa_sublist($atm_sublist)) {
+    if (isa_list($atm_sublist)) {
       foreach (@{ $atm_key->[1] }) {
         if ($atm_self->has_sublist_elem($atm_key->[0], $_)) {
-          &{ $atm_sub }($atm_sublist, $atm_key);
+          &{ $atm_sub }($atm_sublist, $atm_self->{SETTINGS}, $atm_key);
         }
       }
 
@@ -157,7 +175,7 @@ sub apply_to_matches {
     }
   }
   elsif ($self->has_elem($atm_key)) {
-    &{ $atm_sub }($atm_self->{PROJECT}, $atm_key);
+    &{ $atm_sub }($atm_self->{PROJECT}, $atm_self->{SETTINGS}, $atm_key);
     
     return 1;
   }
@@ -167,28 +185,34 @@ sub apply_to_matches {
 
 # change relevant items 
 sub Edit_Element {
-  my ($ee_file, $ee_project, $ee_args) = @_;
+  my ($ee_self, $ee_args) = @_;
   
-  _error('list must have contents') unless (isa_sublist($ee_project));
-  _error('cannot edit with \'all\' status') if ($STATUS eq 'all');
-
-  foreach (@$ee_args) {
-    apply_to_matches(\&_ee_set_attrs, $ee_project, $_);
+  unless isa_list($ee_self->{PROJECT}) {
+    _error('no todo list to work on');
   }
 
-  DumpFile($ee_file, $ee_project);
+  if ($ee_self->{SETTINGS}{STATUS} eq 'all') {
+    _error("cannot edit with \'all\' status");
+  }
+
+  foreach (@$ee_args) {
+    $ee_self->apply_to_matches(\&_ee_set_attrs, $_);
+  }
+
+  DumpFile($ee_self->{TODO_FILE}, $ee_self->{PROJECT});
 
   return 0;
 }
 
 # passed to apply_to_matches by edit_element to change items
 sub _ee_set_attrs {
-  my ($list, $key) = @_;
+  my ($list, $settings, $key) = @_;
 
   my $contents = $list->{contents};
 
-  return unless (defined $STATUS_OPT 
-    || defined $PRIORITY_OPT || defined $DESCRIPTION_OPT);
+  return unless (defined $settings->{STATUS_OPT} 
+          || defined $settings->{PRIORITY_OPT}
+          || defined $settings->{DESCRIPTION_OPT});
 
   my $replacement = {};
 
@@ -196,16 +220,16 @@ sub _ee_set_attrs {
     $replacement = $contents->{$key};
   }
   
-  if (defined $STATUS_OPT) {
-    $replacement->{status} = $STATUS_OPT;
+  if (defined $settings->{STATUS_OPT}) {
+    $replacement->{status} = $settings->{STATUS_OPT};
   }
 
-  if (defined $PRIORITY_OPT) {
-    $replacement->{priority} = $PRIORITY_OPT;
+  if (defined $settings->{PRIORITY_OPT}) {
+    $replacement->{priority} = $settings->{PRIORITY_OPT};
   }
 
-  if (defined $DESCRIPTION_OPT) {
-    $replacement->{description} = $DESCRIPTION_OPT;
+  if (defined $settings->{DESCRIPTION_OPT}) {
+    $replacement->{description} = $settings->{DESCRIPTION_OPT};
   }
 
   $contents->{$key} = $replacement;
@@ -213,20 +237,20 @@ sub _ee_set_attrs {
 
 # print information about items in list
 sub Show_Element {
-  my ($se_project, $se_args) = @_;
+  my ($se_self, $se_args) = @_;
 
-  _error('nothing to show') unless (isa_sublist($se_project));
+  _error('nothing to show') unless (isa_list($se_self->{PROJECT}));
 
   if (scalar @$se_args) {
     foreach (@$se_args) {
       # ignore arrayref args
       if (ref($_) eq '') {
-        apply_to_matches(\&_se_dumper, $se_project, $_);
+        $se_self->apply_to_matches(\&_se_dumper, $_);
       }
     }
   }
   else {
-    _se_dumper($se_project, '');
+    _se_dumper($se_self->{PROJECT}, '');
   }
 
   return 0;
@@ -234,8 +258,7 @@ sub Show_Element {
 
 # print contents of 'list' if items have the right status
 sub _se_dumper {
-  my $project = shift;
-  my $key     = shift;
+  my ($project, $settings, $key) = @_;
 
   my $has_printed_key = 0;
   $has_printed_key    = 1 if $key eq '';
@@ -244,28 +267,38 @@ sub _se_dumper {
     # print each item, excluding sublists, if it has the right status
     # apply the same rule to the ITEMS of a sublist
     while ((my ($k, $v) = each %{ $project->{contents} })) {
-      if (isa_sublist($v)) {
+      if (isa_list($v)) {
         _se_dumper($project, $k);
       }
-      elsif (_has_the_status($v, $STATUS)) {
-        say $k; # TODO show more information about todo, i.e. attributes
+      elsif (_has_the_status(
+                $v,
+                $settings->{STATUS},
+                $settings->{STATUS},
+                $settings->{DEFAULT_STATUS})) {
+
+        say $k; # TODO show more information, i.e. attributes
       }
     }
   }
   else { 
     my $sublist = $project->{contents}{$key};
 
-    return unless isa_sublist($sublist);
+    return unless isa_list($sublist);
 
     while ((my ($k, $v) = each %{ $sublist->{contents} })) {
-      if (_has_the_status($v, $STATUS)) {
+      if (_has_the_status(
+              $v,
+              $settings->{STATUS},
+              $settings->{STATUS},
+              $settings->{DEFAULT_STATUS})) {
+
         unless ($has_printed_key) {
           say $key, ':';
 
           $has_printed_key = 1;
         }
 
-        say '  ', $k; # TODO show more information about todo, i.e. attributes
+        say '  ', $k; # TODO show more information, i.e. attributes
       }
     }
   }
@@ -273,22 +306,27 @@ sub _se_dumper {
 
 # remove relevant items
 sub Delete_Element {
-  my ($de_file, $de_data, $de_args) = @_;
+  my ($de_self, $de_args) = @_;
 
-  _error('nothing to delete') unless (isa_sublist($de_data));
+  _error('nothing to delete') unless isa_list($de_self->{PROJECT});
 
-  my $de_contents = $de_data->{contents};
+  my $de_contents = $de_self->{PROJECT}{contents};
   if (scalar @$de_args) {
     foreach (@$de_args) {
-      apply_to_matches(\&_de_deleter, $de_data, $_);
+      $de_self->apply_to_matches(\&_de_deleter, $_);
     }
   }
   else {
     for my $key (keys %{$de_contents}) {
-      if (_has_the_status($de_contents->{$key}, $STATUS)) {
+      if (_has_the_status(
+              $de_contents->{$key},
+              $de_self->{SETTINGS}{STATUS},
+              $de_self->{SETTINGS}{STATUS},
+              $de_self->{SETTINGS}{DEFAULT_STATUS})) {
+
         delete $de_contents->{$key};
       }
-      elsif (isa_sublist($de_contents->{$key})) {
+      elsif (isa_list($de_contents->{$key})) {
         while ((my ($subkey, $subvalue) = each %{ $de_contents->{$key}{contents} })) {
           _de_deleter($de_contents->{$key}, $subkey);
         }
@@ -296,16 +334,21 @@ sub Delete_Element {
     }
   }
 
-  DumpFile($de_file, $de_data);
+  DumpFile($de_self->{TODO_FILE}, $de_self->{PROJECT});
 
   return 0;
 }
 
 # passed to apply_to_matches by delete_element to remove an item
 sub _de_deleter {
-  my ($project, $key) = @_;
+  my ($project, $settings, $key) = @_;
 
-  if (_has_the_status($project->{contents}{$key}, $STATUS)) {
+  if (_has_the_status(
+          $project->{contents}{$key},
+          $settings->{STATUS},
+          $settings->{STATUS},
+          $settings->{DEFAULT_STATUS})) {
+
     delete $project->{contents}{ $key };
   }
 }
