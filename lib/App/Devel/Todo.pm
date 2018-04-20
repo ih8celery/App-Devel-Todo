@@ -19,10 +19,10 @@ use Devel::Todo;
 
 use feature qw/say/;
 
-use File::Spec::Functions;
+use File::Spec::Functions qw/catfile/;
 use Getopt::Long;
 use Cwd qw/getcwd/;
-use File::Basename;
+use File::Basename qw/dirname/;
 use YAML::XS qw/LoadFile/;
 
 # config variables always relevant to the program
@@ -241,7 +241,7 @@ sub configure_app {
 # until any project or the home directory is found
 sub find_project {
   my $fp_dir  = getcwd;
-  my $fp_file = $fp_dir . '/' . '.todos';
+  my $fp_file = catfile($fp_dir, '.todos');
 
   if ($fp_dir !~ /^$ENV{HOME}/) {
     $fp_dir = $ENV{HOME};
@@ -251,7 +251,7 @@ sub find_project {
       last if -f $fp_file;
 
       $fp_dir  = dirname $fp_dir;
-      $fp_file = $fp_dir . '/' . '.todos';
+      $fp_file = catfile($fp_dir, '.todos');
     }
   }
   
