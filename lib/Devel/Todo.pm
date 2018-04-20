@@ -266,7 +266,7 @@ sub _se_dumper {
     # apply the same rule to the ITEMS of a sublist
     while ((my ($k, $v) = each %{ $project->{contents} })) {
       if (isa_list($v)) {
-        _se_dumper($project, $k);
+        _se_dumper($project, $settings, $k);
       }
       elsif (_has_the_status(
                 $v,
