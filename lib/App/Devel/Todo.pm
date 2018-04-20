@@ -8,6 +8,8 @@ package App::Devel::Todo;
 use strict;
 use warnings;
 
+use feature qw/say/;
+
 BEGIN {
   use Exporter;
 
@@ -15,15 +17,13 @@ BEGIN {
   our @EXPORT = qw/&Run/;
 }
 
-use Devel::Todo;
-
-use feature qw/say/;
-
 use File::Spec::Functions qw/catfile/;
-use Getopt::Long;
+use Getopt::Long qw/:config no_ignore_case/;
 use Cwd qw/getcwd/;
 use File::Basename qw/dirname/;
 use YAML::XS qw/LoadFile/;
+
+use Devel::Todo;
 
 # config variables always relevant to the program
 our $VERSION     = '0.005000';
@@ -53,9 +53,6 @@ our $DT_CONFIG = {
   DEFAULT_PRIORITY    => 0,
   DEFAULT_DESCRIPTION => '',
 };
-
-# options are case-sensitive
-Getopt::Long::Configure('no_ignore_case');
 
 # declare command-line options
 our %OPTS = (
