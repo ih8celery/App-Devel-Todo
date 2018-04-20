@@ -10,7 +10,7 @@ use warnings;
 
 use feature qw/say/;
 
-use YAML::XS qw/LoadFile DumpFile/;
+use YAML::XS qw/LoadFile DumpFile Dump/;
 
 our $VERSION = '0.005000';
 
@@ -22,15 +22,15 @@ sub new {
     TODO_FILE => $n_todo_file,
     PROJECT   => LoadFile($n_todo_file),
     SETTINGS  => {
-      STATUS              => $n_config->{STATUS}
-          || die "no status given",
-      DEFAULT_STATUS      => $n_config->{DEFAULT_STATUS}
-          || die "no default status given",
+      STATUS              => ($n_config->{STATUS}
+          || die "no status given"),
+      DEFAULT_STATUS      => ($n_config->{DEFAULT_STATUS}
+          || die "no default status given"),
       DEFAULT_PRIORITY    => $n_config->{DEFAULT_PRIORITY} || 0,
       DEFAULT_DESCRIPTION => $n_config->{DEFAULT_DESCRIPTION} || '',
-      STATUS_OPT          => $n_config->{STATUS_OPT},
-      PRIORITY_OPT        => $n_config->{PRIORITY_OPT},
-      DESCRIPTION_OPT     => $n_config->{DESCRIPTION_OPT},
+      STATUS_OPT          => $n_config->{STATUS_OPT} || '',
+      PRIORITY_OPT        => $n_config->{PRIORITY_OPT} || '',
+      DESCRIPTION_OPT     => $n_config->{DESCRIPTION_OPT} || '',
       MOVE_ENABLED        => $n_config->{MOVE_ENABLED} || 1,
     },
   };
@@ -131,21 +131,21 @@ sub _ae_maker {
   my ($settings) = @_;
   my $out = {};
 
-  if (!defined($settings->{PRIORITY_OPT})
-    && !defined($settings->{DESCRIPTION_OPT})) {
+  if ($settings->{PRIORITY_OPT} eq ''
+    && $settings->{DESCRIPTION_OPT} eq '') {
     
     return $settings->{DEFAULT_STATUS}
-        unless defined $settings->{STATUS_OPT};
+        unless $settings->{STATUS_OPT} ne '';
 
     return $settings->{STATUS_OPT};
   }
-  elsif (!defined($settings->{PRIORITY_OPT})) {
+  elsif ($settings->{PRIORITY_OPT} eq '') {
     $out->{description} = $settings->{DESCRIPTION_OPT};
   }
-  elsif (!defined($settings->{DESCRIPTION_OPT})) {
+  elsif ($settings->{DESCRIPTION_OPT} eq '') {
     $out->{priority} = $settings->{PRIORITY_OPT};
   }
-  elsif (defined $settings->{STATUS_OPT}) {
+  elsif ($settings->{STATUS_OPT} ne '') {
     $out->{status} = $settings->{STATUS_OPT};
   }
   
@@ -208,9 +208,9 @@ sub _ee_set_attrs {
 
   my $contents = $list->{contents};
 
-  return unless (defined $settings->{STATUS_OPT} 
-          || defined $settings->{PRIORITY_OPT}
-          || defined $settings->{DESCRIPTION_OPT});
+  return if ($settings->{STATUS_OPT} eq '' 
+          && $settings->{PRIORITY_OPT} eq ''
+          && $settings->{DESCRIPTION_OPT} eq '');
 
   my $replacement = {};
 
@@ -218,15 +218,15 @@ sub _ee_set_attrs {
     $replacement = $contents->{$key};
   }
   
-  if (defined $settings->{STATUS_OPT}) {
+  if ($settings->{STATUS_OPT} ne '') {
     $replacement->{status} = $settings->{STATUS_OPT};
   }
 
-  if (defined $settings->{PRIORITY_OPT}) {
+  if ($settings->{PRIORITY_OPT} ne '') {
     $replacement->{priority} = $settings->{PRIORITY_OPT};
   }
 
-  if (defined $settings->{DESCRIPTION_OPT}) {
+  if ($settings->{DESCRIPTION_OPT} ne '') {
     $replacement->{description} = $settings->{DESCRIPTION_OPT};
   }
 
