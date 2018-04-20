@@ -1,7 +1,7 @@
 #! /usr/bin/env perl
 # file: App/Devel/Todo.pm
 # author: Adam Marshall (ih8celery)
-# brief: definitions of todo utility functions
+# brief: define the command-line app's essential functions
 
 package App::Devel::Todo;
 
@@ -27,7 +27,7 @@ use Devel::Todo;
 
 # config variables always relevant to the program
 our $VERSION     = '0.005000';
-our $CONFIG_FILE = "$ENV{HOME}/.todorc.yml";
+our $CONFIG_FILE = catfile($ENV{HOME}, '.todorc.yml');
 
 # define actions
 our $CREATE = 0;
@@ -70,6 +70,8 @@ our %OPTS = (
   'use-description|d=s' => \$DT_CONFIG->{DESCRIPTION_OPT}
 );
 
+# defines default statuses. new statuses in $CONFIG_FILE will
+# be added here
 our %STATUSES = (
   all  => 'selects every item regardless of status',
   do   => 'selects list of todos',
@@ -129,6 +131,8 @@ sub get_possible_subcommand {
       help('a');
     }
     elsif ($ARGV[0] =~ m/\w[\w\-\+\.\/]*/) {
+      # first arg to program looks like a "word", so it may
+      # be a valid subcommand/status
       $gs_STATUS = $ARGV[0];
     }
     else {
@@ -138,6 +142,11 @@ sub get_possible_subcommand {
     shift @ARGV;
   }
 
+  # NOTE: if no args are provided after the subcommand, the
+  # program attempts to show todos with the selected status.
+  # the number of args includes non-global options, since
+  # this sub is called BEFORE GetOptions. I consider this a
+  # BUG
   if ($gs_num_args == 1) {
     $ACTION = $SHOW;
   }
@@ -145,36 +154,43 @@ sub get_possible_subcommand {
   return ($gs_STATUS, 1);
 }
 
-# process non-option arguments into a list of keys and values
+# process non-option arguments after the subcommand into
+# a list of keys and values
 sub process_args {
   my @pa_out  = ();
 
-  my $pa_key   = "";
-  my $pa_blob  = [];
-  my $pa_count = 0;
+  # the following variables matter ONLY in the case that
+  # some args target items in a sublist
+  my $pa_sublist_key   = ""; # name of focused sublist
+  my $pa_sublist_blob  = []; # list of items in focused sublist
+  my $pa_sublist_count = 0;  # number of sublist elements in blob
   foreach (@ARGV) {
     # arg is form 'key.'
-    # finish with current hash, if any, and initialize a new one
+    # finish with current blob, if any, and initialize a new one
     if (m/^\s*(.+?)\.\s*$/) {
-      push @pa_out, [$pa_key, $pa_blob] if $pa_count;
+      if ($pa_sublist_count > 0) {
+        push @pa_out, [$pa_sublist_key, $pa_sublist_blob];
+      }
 
-      $pa_key   = $1;
-      $pa_blob  = [];
-      $pa_count = 0;
+      $pa_sublist_key   = $1;
+      $pa_sublist_blob  = [];
+      $pa_sublist_count = 0;
 
       next;
     }
 
     # arg is form 'key.val'
-    # reset $key and add current hash unless empty and add a pair
+    # reset $key and add current blob unless empty
     if (m/^\s*(.+?)\.(.+)\s*$/) {
-      if ($pa_key ne $1) {
-        push @pa_out, [$pa_key, $pa_blob] if $pa_count;
+      if ($pa_sublist_key ne $1) {
+        if ($pa_sublist_key > 0) {
+          push @pa_out, [$pa_sublist_key, $pa_sublist_blob];
+        }
       }
       
-      $pa_key   = "";
-      $pa_blob  = [];
-      $pa_count = 0;
+      $pa_sublist_key   = "";
+      $pa_sublist_blob  = [];
+      $pa_sublist_count = 0;
 
       push @pa_out, [$1, [$2] ];
 
@@ -182,15 +198,15 @@ sub process_args {
     }
 
     # arg is form 'val'
-    # if $key is "", push to list; else add to current blob 
+    # if $key is "", push blob; else add to current blob 
     if (m/^\s*([^\.]+)\s*$/) {
-      if ($pa_key eq "") {
+      if ($pa_sublist_key eq "") {
         push @pa_out, $1;
       }
       else {
-        $pa_count++;
+        $pa_sublist_count++;
 
-        push @$pa_blob, $1;
+        push @$pa_sublist_blob, $1;
       }
 
       next;
@@ -199,8 +215,8 @@ sub process_args {
     return ();
   }
 
-  if ($pa_count) {
-    push @pa_out, [$pa_key, $pa_blob];
+  if ($pa_sublist_count) {
+    push @pa_out, [$pa_sublist_key, $pa_sublist_blob];
   }
 
   return @pa_out;
@@ -236,10 +252,12 @@ sub configure_app {
 
 # search recursively upward from the current directory for todos
 # until any project or the home directory is found
-sub find_project {
+sub find_project_file {
   my $fp_dir  = getcwd;
   my $fp_file = catfile($fp_dir, '.todos');
 
+  # we can find a project only in the user's home directory
+  # or descendants of it
   if ($fp_dir !~ /^$ENV{HOME}/) {
     $fp_dir = $ENV{HOME};
   }
@@ -284,6 +302,12 @@ sub Run {
     die("error: unknown subcommand: $r_STATUS");
   }
 
+  # because the default status is used extensively to search within
+  # and modify the todos, the default status may not have a value of
+  # 'all'. this is to prevent confusion between what is a status
+  # value (e.g. 'do', 'did') and what is a status representative
+  # (e.g. 'all'). no list item may have a status of 'all' because
+  # it is not a status value
   unless ($DT_CONFIG->{STATUS} eq 'all') {
     $DT_CONFIG->{DEFAULT_STATUS} = $DT_CONFIG->{STATUS};
   }
@@ -294,13 +318,13 @@ sub Run {
   help('s') if $HELP_REQUESTED;
 
   # processes remaining command-line arguments into keys and values
-  # so that it is clear which parts of the 'lists' will be affected
+  # so that it is clear which parts of the todos will be affected
   my @r_args = process_args();
   unless (@r_args) {
     die "error: invalid args to program";
   }
 
-  my $r_project_file = find_project();
+  my $r_project_file = find_project_file();
   unless (-f $r_project_file) {
     die "error: unable to find project file";
   }
