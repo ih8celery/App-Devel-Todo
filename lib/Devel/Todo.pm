@@ -69,8 +69,8 @@ sub has_sublist_elem {
   my ($hse_self, $hse_subkey, $hse_key) = @_;
   my $hse_list = $hse_self->{PROJECT}{contents};
 
-  return (exists $hse_list->{$hse_subkey}
-        && exists $hse_list->{$hse_subkey}{$hse_key});
+  return (isa_list($hse_list->{$hse_subkey})
+        && exists $hse_list->{$hse_subkey}{contents}{$hse_key});
 }
 
 # is scalar a todo list?
@@ -109,8 +109,6 @@ sub Add_Element {
       for my $ae_item_name (@{ $_->[1] }) {
         $ae_sublist->{contents}{$ae_item_name} = $ae_item;
       }
-
-      say Dump $ae_sublist; #ASSERT
     }
     else {
       $ae_self->{PROJECT}{contents}{$_} = $ae_item;
@@ -173,7 +171,7 @@ sub apply_to_matches {
     if (isa_list($atm_sublist)) {
       foreach (@{ $atm_key->[1] }) {
         if ($atm_self->has_sublist_elem($atm_key->[0], $_)) {
-          &{ $atm_sub }($atm_sublist, $atm_self->{SETTINGS}, $atm_key);
+          &{ $atm_sub }($atm_sublist, $atm_self->{SETTINGS}, $_);
         }
       }
 
