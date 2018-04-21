@@ -25,74 +25,13 @@ use YAML::XS qw/LoadFile/;
 
 use Devel::Todo;
 
-# config variables always relevant to the program
-our $VERSION     = '0.005002';
-our $CONFIG_FILE = catfile($ENV{HOME}, '.todorc.yml');
-
-# define actions
-our $CREATE = 0;
-our $SHOW   = 1;
-our $EDIT   = 2;
-our $DELETE = 3;
-
-# the general action which will be taken by the program
-our $ACTION = $CREATE;
-
-# controls whether a help message will be printed for subcommand
-our $HELP_REQUESTED = 0;
-
-# set to 1 when an option explicitly gives the action to use:
-# -C, -S, -N, -D, -E
-our $ACTION_REQUESTED = 0;
-
-# configuration passed to Devel::Todo->new
-our $DT_CONFIG = {
-  STATUS              => 'do',
-  MOVE_ENABLED        => 1,
-  TODO_FILE           => '',
-  STATUS_OPT          => '',
-  PRIORITY_OPT        => '',
-  DESCRIPTION_OPT     => '',
-  DEFAULT_STATUS      => 'do',
-  DEFAULT_PRIORITY    => 0,
-  DEFAULT_DESCRIPTION => '',
-  VERBOSE             => 0,
-};
-
-# declare command-line options
-our %OPTS = (
-  'help|h'           => sub { $HELP_REQUESTED = 1; },
-  'version|v'        => \&version,
-  'verbose|V'        => sub { $DT_CONFIG->{VERBOSE} = 1; },
-  'delete|D'         => sub { $ACTION = $DELETE; $ACTION_REQUESTED = 1; },
-  'create|C'         => sub { $ACTION = $CREATE; $ACTION_REQUESTED = 1; },
-  'edit|E'           => sub { $ACTION = $EDIT; $ACTION_REQUESTED = 1; },
-  'show|S'           => sub { $ACTION = $SHOW; $ACTION_REQUESTED = 1; },
-  'create-no-move|N' => sub { 
-                              $ACTION = $CREATE;
-                              $DT_CONFIG->{MOVE_ENABLED} = 0;
-                              $ACTION_REQUESTED = 1;
-                            },
-  'config-file|f=s'     => \$CONFIG_FILE,
-  'todo-file|t=s'       => \$DT_CONFIG->{TODO_FILE},
-  'use-status|s=s'      => \$DT_CONFIG->{STATUS_OPT},
-  'use-priority|p=s'    => \$DT_CONFIG->{PRIORITY_OPT},
-  'use-description|d=s' => \$DT_CONFIG->{DESCRIPTION_OPT}
-);
-
-# defines default statuses. new statuses in $CONFIG_FILE will
-# be added here
-our %STATUSES = (
-  all  => 'selects every item regardless of status',
-  do   => 'selects list of todos',
-  did  => 'selects list of finished items',
-  want => 'selects list of goals'
-);
+our $VERSION = '0.005002';
 
 # print a help message appropriate to the situation and exit
 sub help {
-  my $h_type = shift || 's';
-  my $h_generalhelp = <<EOM;
+  my ($h_type, $h_custom_msg) = @_;
+
+  my $h_general_msg = <<EOM;
 Options:
 -h|--help              print help
 -v|--version           print application version information
@@ -110,10 +49,10 @@ Options:
 EOM
 
   if ($h_type eq 'a') {
-    say $h_generalhelp;
+    say $h_general_msg;
   }
   else {
-    say $STATUSES{ $DT_CONFIG->{STATUS} };
+    say $h_custom_msg;
   }
 
   exit 0;
@@ -227,16 +166,16 @@ sub process_args {
 # load the global configuration file settings
 # TODO setting default values
 sub configure_app {
-  my ($ca_file) = @_;
+  my ($ca_file, $ca_statuses) = @_;
 
   my $ca_settings = LoadFile($ca_file);
   
   # create new statuses, if any
   if (defined $ca_settings->{statuses}) {
     foreach (keys %{ $ca_settings->{statuses} }) {
-      if ($_ =~ m/\w[\w\-\+\.\/]*/ && !exists($STATUSES{$_})) {
+      if ($_ =~ m/\w[\w\-\+\.\/]*/ && !exists($ca_statuses->{$_})) {
         if (ref $ca_settings->{statuses}{$_} eq '') {
-          $STATUSES{$_} = $ca_settings->{statuses}{$_};
+          $ca_statuses->{$_} = $ca_settings->{statuses}{$_};
         }
         else {
           return (0, "new status $_ is missing help message");
@@ -277,28 +216,90 @@ sub find_project_file {
 
 # main application logic
 sub Run {
+  my $r_config_file = catfile($ENV{HOME}, '.todorc.yml');
+
+  # define possible actions
+  my $r_create = 0;
+  my $r_show   = 1;
+  my $r_edit   = 2;
+  my $r_delete = 3;
+
+  # the general action which will be taken by the program
+  my $r_action = $r_create;
+
+  # controls whether a help message will be printed for subcommand
+  my $r_help_requested = 0;
+
+  # set to 1 when an option explicitly gives the action to use:
+  # -C, -S, -N, -D, -E
+  my $r_action_requested = 0;
+
+  # configuration passed to Devel::Todo->new
+  my $r_dt_config = {
+    STATUS              => 'do',
+    MOVE_ENABLED        => 1,
+    TODO_FILE           => '',
+    STATUS_OPT          => '',
+    PRIORITY_OPT        => '',
+    DESCRIPTION_OPT     => '',
+    DEFAULT_STATUS      => 'do',
+    DEFAULT_PRIORITY    => 0,
+    DEFAULT_DESCRIPTION => '',
+    VERBOSE             => 0,
+  };
+
+  # defines default statuses. new statuses in config file will
+  # be added here
+  my %r_statuses = (
+    all  => 'selects every item regardless of status',
+    do   => 'selects list of todos',
+    did  => 'selects list of finished items',
+    want => 'selects list of goals'
+  );
+
+  # declare command-line options
+  my %r_opts = (
+    'help|h'           => sub { $r_help_requested = 1; },
+    'version|v'        => \&version,
+    'verbose|V'        => sub { $r_dt_config->{VERBOSE} = 1; },
+    'delete|D'         => sub { $r_action = $r_delete; $r_action_requested = 1; },
+    'create|C'         => sub { $r_action = $r_create; $r_action_requested = 1; },
+    'edit|E'           => sub { $r_action = $r_edit; $r_action_requested = 1; },
+    'show|S'           => sub { $r_action = $r_show; $r_action_requested = 1; },
+    'create-no-move|N' => sub { 
+                                $r_action = $r_create;
+                                $r_dt_config->{MOVE_ENABLED} = 0;
+                                $r_action_requested = 1;
+                              },
+    'config-file|f=s'     => \$r_config_file,
+    'todo-file|t=s'       => \$r_dt_config->{TODO_FILE},
+    'use-status|s=s'      => \$r_dt_config->{STATUS_OPT},
+    'use-priority|p=s'    => \$r_dt_config->{PRIORITY_OPT},
+    'use-description|d=s' => \$r_dt_config->{DESCRIPTION_OPT}
+  );
+
   # the possible subcommand retrieved here will be verified
   # after the config file has been processed, since new statuses/
   # subcommands may be defined there
-  my ($r_STATUS, $r_ok) = get_possible_subcommand();
+  my ($r_status, $r_ok) = get_possible_subcommand();
   unless ($r_ok) {
     die "error: expected global option or subcommand";
   }
 
-  unless (GetOptions(%OPTS)) {
+  unless (GetOptions(%r_opts)) {
     exit 1;
   }
 
   # set the action to use implicitly based on number of args
   # after subcommand and options have been extracted
-  if ($ACTION_REQUESTED == 0) {
+  if ($r_action_requested == 0) {
     # if there are any args, attempt to create them in the todo list
     if (@ARGV) {
-      $ACTION = $CREATE;
+      $r_action = $r_create;
     }
     # otherwise, show the entire todo list
     else {
-      $ACTION = $SHOW;
+      $r_action = $r_show;
     }
   }
 
@@ -306,15 +307,15 @@ sub Run {
   # defined, and creates new subcommands/statuses. if any of the
   # latter are invalid for some reason, they will be ignored
   my $r_error;
-  ($r_ok, $r_error) = configure_app($CONFIG_FILE);
+  ($r_ok, $r_error) = configure_app($r_config_file);
   die $r_error unless $r_ok;
 
   # verify the possible subcommand
-  if (exists $STATUSES{$r_STATUS}) {
-    $DT_CONFIG->{STATUS} = $r_STATUS;
+  if (exists $r_statuses{$r_status}) {
+    $r_dt_config->{STATUS} = $r_status;
   }
   else {
-    die("error: unknown subcommand: $r_STATUS");
+    die("error: unknown subcommand: $r_status");
   }
 
   # because the default status is used extensively to search within
@@ -323,14 +324,14 @@ sub Run {
   # value (e.g. 'do', 'did') and what is a status representative
   # (e.g. 'all'). no list item may have a status of 'all' because
   # it is not a status value
-  unless ($DT_CONFIG->{STATUS} eq 'all') {
-    $DT_CONFIG->{DEFAULT_STATUS} = $DT_CONFIG->{STATUS};
+  unless ($r_dt_config->{STATUS} eq 'all') {
+    $r_dt_config->{DEFAULT_STATUS} = $r_dt_config->{STATUS};
   }
   
   # prints help for subcommand
   # this function is called here because not all subcommands
   # may be known until after the app is configured
-  help('s') if $HELP_REQUESTED;
+  help('s', $r_statuses{ $r_dt_config->{STATUS} }) if $r_help_requested;
 
   # processes remaining command-line arguments into keys and values
   # so that it is clear which parts of the todos will be affected
@@ -345,18 +346,18 @@ sub Run {
     die "error: unable to find project file";
   }
 
-  my $r_todo = Devel::Todo->new($r_project_file, $DT_CONFIG);
+  my $r_todo = Devel::Todo->new($r_project_file, $r_dt_config);
 
-  if ($ACTION == $CREATE) {
+  if ($r_action == $r_create) {
     $r_todo->Add_Element($r_args);
   }
-  elsif ($ACTION == $SHOW) {
+  elsif ($r_action == $r_show) {
     $r_todo->Show_Element($r_args);
   }
-  elsif ($ACTION == $EDIT) {
+  elsif ($r_action == $r_edit) {
     $r_todo->Edit_Element($r_args);
   }
-  elsif ($ACTION == $DELETE) {
+  elsif ($r_action == $r_delete) {
     $r_todo->Delete_Element($r_args);
   }
 }
