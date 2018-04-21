@@ -41,6 +41,10 @@ our $ACTION = $CREATE;
 # controls whether a help message will be printed for subcommand
 our $HELP_REQUESTED = 0;
 
+# set to 1 when an option explicitly gives the action to use:
+# -C, -S, -N, -D, -E
+our $ACTION_REQUESTED = 0;
+
 # configuration passed to Devel::Todo->new
 our $DT_CONFIG = {
   STATUS              => 'do',
@@ -57,14 +61,18 @@ our $DT_CONFIG = {
 
 # declare command-line options
 our %OPTS = (
-  'help|h'              => sub { $HELP_REQUESTED = 1; },
-  'version|v'           => \&version,
-  'verbose|V'           => sub { $DT_CONFIG->{VERBOSE} = 1; },
-  'delete|D'            => sub { $ACTION = $DELETE; },
-  'create|C'            => sub { $ACTION = $CREATE; },
-  'edit|E'              => sub { $ACTION = $EDIT; },
-  'show|S'              => sub { $ACTION = $SHOW; },
-  'create-no-move|N'    => sub { $ACTION = $CREATE; $DT_CONFIG->{MOVE_ENABLED} = 0; },
+  'help|h'           => sub { $HELP_REQUESTED = 1; },
+  'version|v'        => \&version,
+  'verbose|V'        => sub { $DT_CONFIG->{VERBOSE} = 1; },
+  'delete|D'         => sub { $ACTION = $DELETE; $ACTION_REQUESTED = 1; },
+  'create|C'         => sub { $ACTION = $CREATE; $ACTION_REQUESTED = 1; },
+  'edit|E'           => sub { $ACTION = $EDIT; $ACTION_REQUESTED = 1; },
+  'show|S'           => sub { $ACTION = $SHOW; $ACTION_REQUESTED = 1; },
+  'create-no-move|N' => sub { 
+                              $ACTION = $CREATE;
+                              $DT_CONFIG->{MOVE_ENABLED} = 0;
+                              $ACTION_REQUESTED = 1;
+                            },
   'config-file|f=s'     => \$CONFIG_FILE,
   'todo-file|t=s'       => \$DT_CONFIG->{TODO_FILE},
   'use-status|s=s'      => \$DT_CONFIG->{STATUS_OPT},
@@ -143,15 +151,6 @@ sub get_possible_subcommand {
     }
 
     shift @ARGV;
-  }
-
-  # NOTE: if no args are provided after the subcommand, the
-  # program attempts to show todos with the selected status.
-  # the number of args includes non-global options, since
-  # this sub is called BEFORE GetOptions. I consider this a
-  # BUG
-  if ($gs_num_args == 1) {
-    $ACTION = $SHOW;
   }
 
   return ($gs_STATUS, 1);
@@ -279,8 +278,8 @@ sub find_project_file {
 # main application logic
 sub Run {
   # the possible subcommand retrieved here will be verified
-  # after the config file has been processed, since status/
-  # subcommand may be defined there
+  # after the config file has been processed, since new statuses/
+  # subcommands may be defined there
   my ($r_STATUS, $r_ok) = get_possible_subcommand();
   unless ($r_ok) {
     die "error: expected global option or subcommand";
@@ -288,6 +287,19 @@ sub Run {
 
   unless (GetOptions(%OPTS)) {
     exit 1;
+  }
+
+  # set the action to use implicitly based on number of args
+  # after subcommand and options have been extracted
+  if ($ACTION_REQUESTED == 0) {
+    # if there are any args, attempt to create them in the todo list
+    if (@ARGV) {
+      $ACTION = $CREATE;
+    }
+    # otherwise, show the entire todo list
+    else {
+      $ACTION = $SHOW;
+    }
   }
 
   # reads the configuration file, sets new app defaults if any
