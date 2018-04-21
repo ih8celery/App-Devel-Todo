@@ -10,9 +10,9 @@ use warnings;
 
 use feature qw/say/;
 
-use YAML::XS qw/LoadFile DumpFile Dump/;
+use YAML::XS qw/LoadFile DumpFile/;
 
-our $VERSION = '0.006000';
+our $VERSION = '0.006001';
 
 # construct a new Devel::Todo object
 sub new {
@@ -90,7 +90,28 @@ sub Add_Element {
     die("error: cannot create with \'all\' status");
   }
 
-  my $ae_item = _ae_maker($ae_self->{SETTINGS});
+  # construct a new list item
+  my $ae_item = {};
+  if ($ae_self->{SETTINGS}{PRIORITY_OPT} eq ''
+    && $ae_self->{SETTINGS}{DESCRIPTION_OPT} eq '') {
+    
+    if ($ae_self->{SETTINGS}{STATUS_OPT} eq '') {
+      $ae_item = $ae_self->{SETTINGS}{DEFAULT_STATUS};
+    }
+    else {
+      $ae_item = $ae_self->{SETTINGS}{STATUS_OPT};
+    }
+  }
+  elsif ($ae_self->{SETTINGS}{PRIORITY_OPT} eq '') {
+    $ae_item->{description} = $ae_self->{SETTINGS}{DESCRIPTION_OPT};
+  }
+  elsif ($ae_self->{SETTINGS}{DESCRIPTION_OPT} eq '') {
+    $ae_item->{priority} = $ae_self->{SETTINGS}{PRIORITY_OPT};
+  }
+  elsif ($ae_self->{SETTINGS}{STATUS_OPT} ne '') {
+    $ae_item->{status} = $ae_self->{SETTINGS}{STATUS_OPT};
+  }
+
   for (@$ae_args) {
     if ($ae_self->{SETTINGS}{MOVE_ENABLED}
       && $ae_self->apply_to_matches(\&_ae_mover, $_)) {
@@ -131,32 +152,6 @@ sub _ae_mover {
   else {
     $project->{contents}{$key} = $settings->{STATUS};
   }
-}
-
-# create a new list item
-sub _ae_maker {
-  my ($settings) = @_;
-  my $out = {};
-
-  if ($settings->{PRIORITY_OPT} eq ''
-    && $settings->{DESCRIPTION_OPT} eq '') {
-    
-    return $settings->{DEFAULT_STATUS}
-        unless $settings->{STATUS_OPT} ne '';
-
-    return $settings->{STATUS_OPT};
-  }
-  elsif ($settings->{PRIORITY_OPT} eq '') {
-    $out->{description} = $settings->{DESCRIPTION_OPT};
-  }
-  elsif ($settings->{DESCRIPTION_OPT} eq '') {
-    $out->{priority} = $settings->{PRIORITY_OPT};
-  }
-  elsif ($settings->{STATUS_OPT} ne '') {
-    $out->{status} = $settings->{STATUS_OPT};
-  }
-  
-  return $out;
 }
 
 # call a function on all relevant items
