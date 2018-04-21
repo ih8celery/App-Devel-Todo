@@ -32,6 +32,7 @@ sub new {
       PRIORITY_OPT        => $n_config->{PRIORITY_OPT} || '',
       DESCRIPTION_OPT     => $n_config->{DESCRIPTION_OPT} || '',
       MOVE_ENABLED        => $n_config->{MOVE_ENABLED} || 1,
+      VERBOSE             => $n_config->{VERBOSE} || 0,
     },
   };
 
@@ -284,7 +285,7 @@ sub _se_dumper {
       }
     }
   }
-  else { 
+  else {
     my $sublist = $project->{contents}{$key};
 
     return unless isa_list($sublist);
@@ -297,12 +298,26 @@ sub _se_dumper {
               $settings->{DEFAULT_STATUS})) {
 
         unless ($has_printed_key) {
-          say $key, ':';
+          print $key, ':';
+
+          if ($settings->{VERBOSE} == 1
+            && exists $sublist->{description}) {
+            
+            print " ($sublist->{description}";
+          }          
+          print "\n";
 
           $has_printed_key = 1;
         }
 
-        say '  ', $k; # TODO show more information, i.e. attributes
+        print '  ', $k;
+
+        if ($settings->{VERBOSE} == 1) {
+          if (ref($v) eq 'HASH' && exists $v->{description}) {
+            print " ($v->{description})";
+          }
+        }
+        print "\n";
       }
     }
   }
