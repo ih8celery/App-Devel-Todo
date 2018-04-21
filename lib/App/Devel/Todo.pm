@@ -25,7 +25,7 @@ use YAML::XS qw/LoadFile/;
 
 use Devel::Todo;
 
-our $VERSION = '0.005002';
+our $VERSION = '0.006000';
 
 # print a help message appropriate to the situation and exit
 sub help {
