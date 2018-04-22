@@ -164,7 +164,6 @@ sub process_args {
 }
 
 # load the global configuration file settings
-# TODO setting default values
 sub configure_app {
   my ($ca_file, $ca_statuses) = @_;
 
@@ -188,7 +187,16 @@ sub configure_app {
   }
 
   # set defaults, if any
-  return (1, '');
+  my $ca_defaults = {};
+
+  ## set default verbosity, if specified in file
+  if (defined $ca_settings->{verbose}) {
+    if (ref($ca_settings->{verbose}) eq '') {
+      $ca_defaults->{verbose} = 0 + $ca_settings->{verbose};
+    }
+  }
+
+  return (1, $ca_defaults);
 }
 
 # search recursively upward from the current directory for todos
@@ -306,9 +314,14 @@ sub Run {
   # reads the configuration file, sets new app defaults if any
   # defined, and creates new subcommands/statuses. if any of the
   # latter are invalid for some reason, they will be ignored
-  my $r_error;
-  ($r_ok, $r_error) = configure_app($r_config_file);
-  die $r_error unless $r_ok;
+  my $r_result;
+  ($r_ok, $r_result) = configure_app($r_config_file);
+  die $r_result unless $r_ok;
+
+  # set default verbosity if found in config file
+  if (defined $r_result->{verbose}) {
+    $r_dt_config->{VERBOSE} = $r_result->{verbose};
+  }
 
   # verify the possible subcommand
   if (exists $r_statuses{$r_status}) {
