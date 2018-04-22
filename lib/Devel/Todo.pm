@@ -59,14 +59,14 @@ sub _has_the_status {
 }
 
 # does todo list have item named after key?
-sub has_elem {
+sub has_element {
   my ($he_self, $he_key) = @_;
 
   return (exists $he_self->{PROJECT}{contents}{$he_key});
 }
 
 # does todo list have a sublist with an item named after key
-sub has_sublist_elem {
+sub has_sublist_element {
   my ($hse_self, $hse_subkey, $hse_key) = @_;
   my $hse_list = $hse_self->{PROJECT}{contents};
 
@@ -159,14 +159,14 @@ sub apply_to_matches {
   my ($atm_self, $atm_sub, $atm_key) = @_;
 
   if (ref($atm_key) eq 'ARRAY') {
-    return 0 unless $atm_self->has_elem($atm_key->[0]);
+    return 0 unless $atm_self->has_element($atm_key->[0]);
 
     my $atm_count   = 0;
     my $atm_sublist = $atm_self->{PROJECT}{contents}{ $atm_key->[0] };
 
     if (isa_list($atm_sublist)) {
       foreach (@{ $atm_key->[1] }) {
-        if ($atm_self->has_sublist_elem($atm_key->[0], $_)) {
+        if ($atm_self->has_sublist_element($atm_key->[0], $_)) {
           &{ $atm_sub }($atm_sublist, $atm_self->{SETTINGS}, $_);
         }
       }
@@ -174,7 +174,7 @@ sub apply_to_matches {
       return $atm_count;
     }
   }
-  elsif ($atm_self->has_elem($atm_key)) {
+  elsif ($atm_self->has_element($atm_key)) {
     &{ $atm_sub }($atm_self->{PROJECT}, $atm_self->{SETTINGS}, $atm_key);
     
     return 1;
