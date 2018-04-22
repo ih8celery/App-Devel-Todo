@@ -578,4 +578,46 @@ element named $name inside it
 
 =head1 Examples
 
-oops, there's nothing here
+the file looks like this:
+  ---
+  name: today
+  contents:
+    eat:
+      status: do
+      priority: 3
+    sleep: want
+    code:
+      status: do
+      priority: 0
+      description: just a little more until this project is finished!
+      contents:
+        Devel::Todo pod: do
+        Devel::Todo tests: do
+        App::Devel::Todo tests: did
+        App::Devel::Todo pod: did
+  ...
+
+
+my $config = {
+      STATUS              => "do",
+      DEFAULT_STATUS      => "do",
+      DEFAULT_PRIORITY    => 0,
+      DEFAULT_DESCRIPTION => '',
+      STATUS_OPT          => "want",
+      PRIORITY_OPT        => 0,
+      DESCRIPTION_OPT     => '',
+      MOVE_ENABLED        => 1,
+      VERBOSE             => 0,
+};
+
+my $todos = Devel::Todo->new($file, $config);
+
+$todos->Delete_Element(["code"]); # removes entire "code" sublist
+
+$todos->Edit_Element(["eat"]); # status of "edit" element -> "want"
+
+$todos->Show_Element([]); # prints nothing, because nothing matches
+                          # the current status
+
+$todos->Add_Element(["exercise"]); # creates new element with status
+                                   # "want" because STATUS_OPT is defined
