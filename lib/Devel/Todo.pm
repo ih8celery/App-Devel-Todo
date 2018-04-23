@@ -212,7 +212,7 @@ sub _ae_mover {
 
 # call a function on all relevant items
 sub apply_to_matches {
-  my ($atm_self, $atm_sub, $atm_key) = @_;
+  my ($atm_self, $atm_sub, $atm_key, $atm_is_list_op) = @_;
 
   if (ref($atm_key) eq 'ARRAY') {
     return 0 unless $atm_self->has_element($atm_key->[0]);
@@ -225,6 +225,13 @@ sub apply_to_matches {
         if ($atm_self->has_element($atm_key->[0], $_)) {
           &{ $atm_sub }($atm_sublist, $atm_self->{SETTINGS}, $_);
         }
+
+        if (defined $atm_is_list_op) {
+          &{ $atm_sub }($atm_self->{PROJECT},
+                        $atm_self->{SETTINGS},
+                        $atm_key->[0],
+                        $atm_is_list_op);
+        }
       }
 
       return $atm_count;
@@ -233,6 +240,14 @@ sub apply_to_matches {
   elsif ($atm_self->has_element($atm_key)) {
     &{ $atm_sub }($atm_self->{PROJECT}, $atm_self->{SETTINGS}, $atm_key);
     
+    if (defined $atm_is_list_op) {
+      &{ $atm_sub }(
+          $atm_self->{PROJECT},
+          $atm_self->{SETTINGS},
+          $atm_key,
+          $atm_is_list_op);
+    }
+
     return 1;
   }
 
@@ -399,20 +414,8 @@ sub Delete_Element {
     }
   }
   else {
-    for my $key (keys %{$de_contents}) {
-      if (_has_the_status(
-              $de_contents->{$key},
-              $de_self->{SETTINGS}{STATUS},
-              $de_self->{SETTINGS}{STATUS},
-              $de_self->{SETTINGS}{DEFAULT_STATUS})) {
-
-        delete $de_contents->{$key};
-      }
-      elsif ($de_self->isa_list($de_contents->{$key})) {
-        while ((my ($subkey, $subvalue) = each %{ $de_contents->{$key}{contents} })) {
-          _de_deleter($de_contents->{$key}, $de_self->{SETTINGS}, $subkey);
-        }
-      }
+    foreach (keys %$de_contents) {
+      $de_self->apply_to_matches(\&_de_deleter, $_);
     }
   }
 
@@ -423,15 +426,39 @@ sub Delete_Element {
 
 # passed to apply_to_matches by delete_element to remove an item
 sub _de_deleter {
-  my ($project, $settings, $key) = @_;
+  my ($project, $settings, $key, $is_list_op) = @_;
 
-  if (_has_the_status(
+  if (defined $is_list_op
+    && _has_the_status(
+          $project->{contents}{$key},
+          $settings->{STATUS},
+          $settings->{STATUS},
+          $settings->{DEFAULT_STATUS})) {
+    
+    unless (keys %{ $project->{$key}{contents} }) {
+      delete $project->{contents}{$key};
+    }
+  }
+  else {
+    if (_has_the_status(
           $project->{contents}{$key},
           $settings->{STATUS},
           $settings->{STATUS},
           $settings->{DEFAULT_STATUS})) {
 
-    delete $project->{contents}{ $key };
+      if (ref $project->{contents}{$key} eq 'HASH'
+        && exists $project->{contents}{$key}{contents}) {
+
+        my $contents = $project->{contents}{$key}{contents};
+
+        foreach (keys %$contents) {
+          _de_deleter($project->{contents}{$key}, $settings, $_);
+        }
+      }
+      else {
+        delete $project->{contents}{$key};
+      }
+    }
   }
 }
 
