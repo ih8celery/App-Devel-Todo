@@ -112,7 +112,7 @@ sub Add_Element {
     $ae_item->{status} = $ae_self->{SETTINGS}{STATUS_OPT};
   }
 
-  for (@$ae_args) {
+  foreach (@$ae_args) {
     if ($ae_self->{SETTINGS}{MOVE_ENABLED}
       && $ae_self->apply_to_matches(\&_ae_mover, $_)) {
 
@@ -276,7 +276,14 @@ sub _se_dumper {
                 $settings->{STATUS},
                 $settings->{DEFAULT_STATUS})) {
 
-        say $k; # TODO show more information, i.e. attributes
+        print $k;
+
+        if ($settings->{VERBOSE} == 1) {
+          if (ref($v) eq 'HASH' && exists $v->{description}) {
+            print " ($v->{description})";
+          }
+        }
+        print "\n";
       }
     }
   }
