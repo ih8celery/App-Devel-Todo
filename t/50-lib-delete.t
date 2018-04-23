@@ -56,19 +56,19 @@ $todos->Delete_Element(['sleep']);
 ok($todos->has_element('sleep'), 'still has element named sleep');
 note('an element will not be deleted if its status is mismatched');
 
-ok($todos->has_sublist_element('code', 'review'), 'has sublist element named review');
+ok($todos->has_element('code', 'review'), 'has sublist element named review');
 
 $todos->Delete_Element([ ['code', ['review'] ] ]);
-ok(!$todos->has_sublist_element('code', 'review'), 'deleted review');
+ok(!$todos->has_element('code', 'review'), 'deleted review');
 
-ok($todos->has_sublist_element('code', 'doc'), 'code sublist has element doc');
-ok($todos->has_sublist_element('code', 'test'), 'code sublist has element test');
+ok($todos->has_element('code', 'doc'), 'code sublist has element doc');
+ok($todos->has_element('code', 'test'), 'code sublist has element test');
 
 $todos->Delete_Element(['code']);
-ok(!$todos->has_sublist_element('code', 'test'),
+ok(!$todos->has_element('code', 'test'),
   'deleting sublist deleted test element');
 
-ok($todos->has_sublist_element('code', 'doc'),
+ok($todos->has_element('code', 'doc'),
   'deleting sublist does not affect elements with mismatched status');
 
 ok($todos->has_element('bathe'), 'list has bath element');

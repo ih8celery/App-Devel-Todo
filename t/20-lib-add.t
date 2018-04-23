@@ -47,7 +47,7 @@ ok($todos->has_element('test Devel::Todo')
   && $todos->has_element('install Devel::Todo'),
   'add two items at once to todo list');
 
-ok($todos->has_sublist_element('app', 'preview doc'),
+ok($todos->has_element('app', 'preview doc'),
   'create sublist with one element');
 
 close($fh);

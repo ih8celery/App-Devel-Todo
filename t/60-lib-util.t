@@ -47,9 +47,9 @@ ok($todos->has_element('eat'), 'has element named eat');
 
 ok(!$todos->has_element('EAT'), 'does not have element named EAT');
 
-ok($todos->has_sublist_element('code', 'doc'), 'sublist code has element doc');
+ok($todos->has_element('code', 'doc'), 'sublist code has element doc');
 
-ok(!$todos->has_sublist_element('code', 'test'), 'sublist code does not have element test');
+ok(!$todos->has_element('code', 'test'), 'sublist code does not have element test');
 
 sub write_uc {
   print uc($_[2]), "\n";
