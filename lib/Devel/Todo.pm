@@ -24,19 +24,17 @@ sub new {
     TODO_FILE => $n_todo_file,
     NAME      => $n_yaml->{name} || '',
     PROJECT   => $n_yaml->{contents} || die "no project",
-    SETTINGS  => {
-      STATUS              => ($n_config->{STATUS}
+    STATUS              => ($n_config->{STATUS}
           || die "no status given"),
-      DEFAULT_STATUS      => ($n_config->{DEFAULT_STATUS}
+    DEFAULT_STATUS      => ($n_config->{DEFAULT_STATUS}
           || die "no default status given"),
-      DEFAULT_PRIORITY    => $n_config->{DEFAULT_PRIORITY} || 0,
-      DEFAULT_DESCRIPTION => $n_config->{DEFAULT_DESCRIPTION} || '',
-      STATUS_OPT          => $n_config->{STATUS_OPT} || '',
-      PRIORITY_OPT        => $n_config->{PRIORITY_OPT} || '',
-      DESCRIPTION_OPT     => $n_config->{DESCRIPTION_OPT} || '',
-      MOVE_ENABLED        => $n_config->{MOVE_ENABLED} || 1,
-      VERBOSE             => $n_config->{VERBOSE} || 0,
-    },
+    DEFAULT_PRIORITY    => $n_config->{DEFAULT_PRIORITY} || 0,
+    DEFAULT_DESCRIPTION => $n_config->{DEFAULT_DESCRIPTION} || '',
+    STATUS_OPT          => $n_config->{STATUS_OPT} || '',
+    PRIORITY_OPT        => $n_config->{PRIORITY_OPT} || '',
+    DESCRIPTION_OPT     => $n_config->{DESCRIPTION_OPT} || '',
+    MOVE_ENABLED        => $n_config->{MOVE_ENABLED} || 1,
+    VERBOSE             => $n_config->{VERBOSE} || 0,
   };
 
   bless $n_self, $n_class;
@@ -63,14 +61,6 @@ sub _has_the_status {
 
 sub file {
   return ($_[0]->{TODO_FILE});
-}
-
-sub status {
-  return ($_[0]->{SETTINGS}{STATUS});
-}
-
-sub default_status {
-  return ($_[0]->{SETTINGS}{DEFAULT_STATUS});
 }
 
 sub contents {
@@ -169,7 +159,7 @@ sub get_attributes {
       $ga_out->{status} = $ga_element->{status};
     }
     else {
-      $ga_out->{status} = $ga_self->{SETTINGS}{DEFAULT_STATUS};
+      $ga_out->{status} = $ga_self->{DEFAULT_STATUS};
     }
 
     if (exists $ga_element->{priority}) {
@@ -188,34 +178,34 @@ sub get_attributes {
 sub Add_Element {
   my ($ae_self, $ae_args) = @_;
 
-  if ($ae_self->{SETTINGS}{STATUS} eq 'all') {
+  if ($ae_self->{STATUS} eq 'all') {
     die("error: cannot create with \'all\' status");
   }
 
   # construct a new list item
   my $ae_elem = {};
-  if ($ae_self->{SETTINGS}{PRIORITY_OPT} eq ''
-    && $ae_self->{SETTINGS}{DESCRIPTION_OPT} eq '') {
+  if ($ae_self->{PRIORITY_OPT} eq ''
+    && $ae_self->{DESCRIPTION_OPT} eq '') {
     
-    if ($ae_self->{SETTINGS}{STATUS_OPT} eq '') {
-      $ae_elem = $ae_self->{SETTINGS}{DEFAULT_STATUS};
+    if ($ae_self->{STATUS_OPT} eq '') {
+      $ae_elem = $ae_self->{DEFAULT_STATUS};
     }
     else {
-      $ae_elem = $ae_self->{SETTINGS}{STATUS_OPT};
+      $ae_elem = $ae_self->{STATUS_OPT};
     }
   }
-  elsif ($ae_self->{SETTINGS}{PRIORITY_OPT} eq '') {
-    $ae_elem->{description} = $ae_self->{SETTINGS}{DESCRIPTION_OPT};
+  elsif ($ae_self->{PRIORITY_OPT} eq '') {
+    $ae_elem->{description} = $ae_self->{DESCRIPTION_OPT};
   }
-  elsif ($ae_self->{SETTINGS}{DESCRIPTION_OPT} eq '') {
-    $ae_elem->{priority} = $ae_self->{SETTINGS}{PRIORITY_OPT};
+  elsif ($ae_self->{DESCRIPTION_OPT} eq '') {
+    $ae_elem->{priority} = $ae_self->{PRIORITY_OPT};
   }
-  elsif ($ae_self->{SETTINGS}{STATUS_OPT} ne '') {
-    $ae_elem->{status} = $ae_self->{SETTINGS}{STATUS_OPT};
+  elsif ($ae_self->{STATUS_OPT} ne '') {
+    $ae_elem->{status} = $ae_self->{STATUS_OPT};
   }
 
   foreach (@$ae_args) {
-    if ($ae_self->{SETTINGS}{MOVE_ENABLED}
+    if ($ae_self->{MOVE_ENABLED}
       && $ae_self->apply_to_matches(\&_ae_mover, $_)) {
 
       next;
@@ -269,12 +259,11 @@ sub apply_to_matches {
     if ($atm_self->isa_list($atm_sublist)) {
       foreach (@{ $atm_key->[1] }) {
         if ($atm_self->has_element($atm_key->[0], $_)) {
-          &{ $atm_sub }($atm_sublist, $atm_self->{SETTINGS}, $_);
+          &{ $atm_sub }($atm_self, $_);
         }
 
         if (defined $atm_is_list_op) {
-          &{ $atm_sub }($atm_self->{PROJECT},
-                        $atm_self->{SETTINGS},
+          &{ $atm_sub }($atm_self,
                         $atm_key->[0],
                         $atm_is_list_op);
         }
@@ -284,12 +273,11 @@ sub apply_to_matches {
     }
   }
   elsif ($atm_self->has_element($atm_key)) {
-    &{ $atm_sub }($atm_self->{PROJECT}, $atm_self->{SETTINGS}, $atm_key);
+    &{ $atm_sub }($atm_self, $atm_key);
     
     if (defined $atm_is_list_op) {
       &{ $atm_sub }(
-          $atm_self->{PROJECT},
-          $atm_self->{SETTINGS},
+          $atm_self,
           $atm_key,
           $atm_is_list_op);
     }
@@ -308,7 +296,7 @@ sub Edit_Element {
     die('error: no todo list to work on');
   }
 
-  if ($ee_self->{SETTINGS}{STATUS} eq 'all') {
+  if ($ee_self->{STATUS} eq 'all') {
     die("error: cannot edit with \'all\' status");
   }
 
@@ -368,7 +356,7 @@ sub Show_Element {
     }
   }
   else {
-    _se_dumper($se_self->{PROJECT}, $se_self->{SETTINGS}, '');
+    _se_dumper($atm_self, '');
   }
 
   return 0;
