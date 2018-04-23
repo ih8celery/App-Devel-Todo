@@ -84,10 +84,18 @@ sub has_element {
 
 # is scalar a todo list?
 sub isa_list {
-  my ($self, $val) = @_;
+  my ($il_self, $il_val) = @_;
 
-  return (ref($val) eq 'HASH' && exists $val->{contents}
-    && ref($val->{contents}) eq 'HASH');
+  return (ref($il_val) eq 'HASH' && exists $il_val->{contents}
+    && ref($il_val->{contents}) eq 'HASH');
+}
+
+# is scalar an empty todo list?
+sub is_empty_list {
+  my ($iel_self, $iel_val) = @_;
+
+  return ($iel_self->isa_list($iel_val)
+    && scalar keys %{ $iel_val->{contents} });
 }
 
 # get a hash reference to a copy of an element's attributes
