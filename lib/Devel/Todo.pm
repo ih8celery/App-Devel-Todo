@@ -630,6 +630,16 @@ start of the list is the Entire YAML document.
 predicate. check for existence of an element in the list
 or in a sublist
 
+=item get_attributes($name [, $subname])
+
+get a hash reference containing copies of the defined attributes
+of an element. the result can hold at most values for 'status',
+'priority', and 'description'. if an element does not directly
+specify its status, the default status is assumed. if the
+arguments to get_attributes specify an element that does not exist,
+the function returns an empty hash. NOTE: if an attribute is
+not defined, no value for it will exist in the hash.
+
 =back
 
 =head1 Examples
