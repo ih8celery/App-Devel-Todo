@@ -60,18 +60,26 @@ sub _has_the_status {
 
 # does todo list have item named after key?
 sub has_element {
-  my ($he_self, $he_key) = @_;
+  my ($he_self, @he_keys) = @_;
 
-  return (exists $he_self->{PROJECT}{contents}{$he_key});
-}
+  return 0 unless @he_keys;
 
-# does todo list have a sublist with an item named after key
-sub has_sublist_element {
-  my ($hse_self, $hse_subkey, $hse_key) = @_;
-  my $hse_list = $hse_self->{PROJECT}{contents};
+  if (scalar @he_keys == 1) {
+    return (exists $he_self->{PROJECT}{contents}{$he_keys[0]});
+  }
+  else {
+    if (exists $he_self->{PROJECT}{contents}{$he_keys[0]}) {
+      my $he_sublist = $he_self->{PROJECT}{contents}{$he_keys[0]};
 
-  return (isa_list($hse_list->{$hse_subkey})
-        && exists $hse_list->{$hse_subkey}{contents}{$hse_key});
+      if (isa_list($he_sublist)
+        && exists $he_sublist->{contents}{$he_keys[1]}) {
+      
+        return 1;
+      }
+    }
+
+    return 0;
+  }
 }
 
 # is scalar a todo list?
@@ -166,7 +174,7 @@ sub apply_to_matches {
 
     if (isa_list($atm_sublist)) {
       foreach (@{ $atm_key->[1] }) {
-        if ($atm_self->has_sublist_element($atm_key->[0], $_)) {
+        if ($atm_self->has_element($atm_key->[0], $_)) {
           &{ $atm_sub }($atm_sublist, $atm_self->{SETTINGS}, $_);
         }
       }
@@ -572,14 +580,10 @@ project settings, which have the same keys defined in $config passed
 to new, 3) the string name of the element in the list or sublist. the
 start of the list is the Entire YAML document.
 
-=item has_element($name)
+=item has_element($name [, $subname])
 
 predicate. check for existence of an element in the list
-
-=item has_sublist_element($sublist_name, $name)
-
-predicate. check for existence of sublist named $sublist_name and an
-element named $name inside it
+or in a sublist
 
 =back
 
