@@ -40,22 +40,22 @@ sub new {
   bless $n_self, $n_class;
 }
 
-# does list item have a status?
-sub _has_the_status {
-  my ($elem, $cmp_status, $status, $default_status) = @_;
+# does list item have a particular status?
+sub has_status {
+  my ($hs_self, $hs_elem, $hs_status) = @_;
 
-  return 1 if ($status eq 'all');
+  return 1 if ($hs_self->{STATUS} eq 'all');
 
-  if (ref($elem) eq "HASH") {
-    if (exists $elem->{status} && defined $elem->{status}) {
-      return ($cmp_status eq $elem->{status});
+  if (ref($hs_elem) eq "HASH") {
+    if (exists $hs_elem->{status} && defined $hs_elem->{status}) {
+      return ($hs_status eq $hs_elem->{status});
     }
     else {
-      return ($default_status eq $cmp_status);
+      return ($hs_self->{DEFAULT_STATUS} eq $hs_status);
     }
   }
   else {
-    return ($cmp_status eq $elem);
+    return ($hs_status eq $hs_elem);
   }
 }
 
@@ -389,12 +389,7 @@ sub _se_dumper {
       if ($self->isa_list($v)) {
         _se_dumper($self, $k);
       }
-      elsif (_has_the_status(
-                $v,
-                $self->{STATUS},
-                $self->{STATUS},
-                $self->{DEFAULT_STATUS})) {
-
+      elsif ($self->has_the_status($v, $self->{STATUS})) {
         print $k;
 
         if ($self->{VERBOSE} == 1) {
@@ -412,11 +407,7 @@ sub _se_dumper {
     return unless ($self->isa_list($sublist));
 
     while ((my ($k, $v) = each %{ $sublist->{contents} })) {
-      if (_has_the_status(
-              $v,
-              $self->{STATUS},
-              $self->{STATUS},
-              $self->{DEFAULT_STATUS})) {
+      if ($self->has_the_status($v, $self->{STATUS})) {
 
         unless ($has_printed_key) {
           print $keys[0], ':';
@@ -473,25 +464,14 @@ sub _de_deleter {
   my ($self, @keys) = @_;
 
   # we know we are operating on a sublist
-  if (defined $is_list_op
-    && _has_the_status(
-          $self->get_element(@keys),
-          $self->{STATUS},
-          $self->{STATUS},
-          $self->{DEFAULT_STATUS})) {
-    
+  if ($self->has_status($self->get_element(@keys), $self->{STATUS})) {
     unless (keys %{ $self->contents($keys[0]) }) {
       delete $self->{PROJECT}{$keys[0]};
     }
   }
   # @keys may or may not point to a sublist
   else {
-    if (_has_the_status(
-          $self->get_element(@keys),
-          $self->{STATUS},
-          $self->{STATUS},
-          $self->{DEFAULT_STATUS})) {
-
+    if ($self->has_status($self->get_element(@keys), $self->{STATUS})) {
       my $elem = $self->get_element(@keys);
       if ($self->isa_list($elem)) {
         foreach (keys %{ $elem->{contents} }) {
