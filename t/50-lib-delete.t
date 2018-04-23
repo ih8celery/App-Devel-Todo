@@ -79,6 +79,6 @@ $todos->Delete_Element([]);
 
 ok(!$todos->has_element('bathe'), 'element named bathe deleted');
 ok($todos->has_element('sleep'), 'element named sleep unaffected by delete');
-ok($todos->has_element('code'), 'sublist code unaffected by delete');
+ok($todos->has_element('code'), 'sublist code unaffected by delete or rest of list');
 
 done_testing();
