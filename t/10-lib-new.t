@@ -39,4 +39,6 @@ my $todos = Devel::Todo->new($file, $conf);
 
 isa_ok($todos, 'Devel::Todo');
 
+close($fh);
+
 done_testing();
