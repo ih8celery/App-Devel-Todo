@@ -58,6 +58,54 @@ sub _has_the_status {
   }
 }
 
+sub file {
+  return ($_[0]->{TODO_FILE});
+}
+
+sub status {
+  return ($_[0]->{SETTINGS}{STATUS});
+}
+
+sub default_status {
+  return ($_[0]->{SETTINGS}{DEFAULT_STATUS});
+}
+
+sub contents {
+  my ($l_self, $l_key) = @_;
+
+  if (defined $l_key && $l_self->has_element($l_key)) {
+    my $l_element = $l_self->{PROJECT}{contents}{$l_key};
+
+    if ($l_self->isa_list($l_element)) {
+      return $l_element->{contents};
+    }
+    else {
+      return {};
+    }
+  }
+  else {
+    return $l_self->{PROJECT}{contents};
+  }
+}
+
+sub get_element {
+  my ($ge_self, @ge_keys) = @_;
+
+  return {} unless $ge_self->has_element(@ge_keys);
+
+  if (scalar @ge_keys == 1) {
+    return $ge_self->contents()->{$ge_keys[0]};
+  }
+  else {
+    return $ge_self->contents($ge_keys[0])->{$ge_keys[1]};
+  }
+}
+
+# save the project to a file
+sub save_project {
+  DumpFile($_[0]->{TODO_FILE}, $_[0]->{PROJECT});
+}
+
 # does todo list have item named after key?
 sub has_element {
   my ($he_self, @he_keys) = @_;
@@ -193,7 +241,7 @@ sub Add_Element {
     }
   }
 
-  DumpFile($ae_self->{TODO_FILE}, $ae_self->{PROJECT});
+  $ae_self->save_project();
 
   return 0;
 }
@@ -270,7 +318,7 @@ sub Edit_Element {
     $ee_self->apply_to_matches(\&_ee_set_attrs, $_);
   }
 
-  DumpFile($ee_self->{TODO_FILE}, $ee_self->{SETTINGS}, $ee_self->{PROJECT});
+  $ee_self->save_project();
 
   return 0;
 }
@@ -419,7 +467,7 @@ sub Delete_Element {
     }
   }
 
-  DumpFile($de_self->{TODO_FILE}, $de_self->{PROJECT});
+  $de_self->save_project();
 
   return 0;
 }
