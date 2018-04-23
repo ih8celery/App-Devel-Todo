@@ -13,8 +13,19 @@ use feature qw/say/;
 BEGIN {
   use Exporter;
 
-  our @ISA = qw/Exporter/;
-  our @EXPORT = qw/&Run/;
+  our @ISA         = qw/Exporter/;
+  our @EXPORT      = qw/&Run/;
+  our @EXPORT_OK   = qw{&find_project_file
+                        &process_args
+                        &get_possible_subcommand
+                        &configure_app
+                        &Run};
+  our %EXPORT_TAGS = (
+    tests => ['&find_project_file',
+              '&process_args',
+              '&get_possible_subcommand',
+              '&configure_app'],
+  );
 }
 
 use File::Spec::Functions qw/catfile/;
