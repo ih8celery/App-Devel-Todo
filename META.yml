@@ -9,6 +9,11 @@ build_requires:
   Test::More: '>0.9'
 configure_requires:
   Module::Build: '0'
+test_requires:
+  Test::More: '>0.9'
+  Test::Output: '0'
+  File::Temp: '>0.20'
+  YAML::XS: '0'
 requires:
   Getopt::Long: '>2.24'
   Cwd: '0'

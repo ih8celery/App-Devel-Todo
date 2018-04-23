@@ -23,8 +23,10 @@ my $build = Module::Build->new(
     'Module::Build' => '>0.2'
   },
   test_requires  => {
-    'Test::More' => '>0.9',
-    'YAML::XS'   => '0'
+    'Test::More'   => '>0.9',
+    'YAML::XS'     => '0',
+    'Test::Output' => '0',
+    'File::Temp'   => '>0.2'
   },
   create_license => 1,
   license        => 'mit'
