@@ -90,6 +90,46 @@ sub isa_list {
     && ref($val->{contents}) eq 'HASH');
 }
 
+# get a hash reference to a copy of an element's attributes
+sub get_attributes {
+  my ($ga_self, @ga_keys) = @_;
+
+  return {} unless (@ga_keys && $ga_self->has_element(@ga_keys));
+
+  my $ga_out = {};
+  my $ga_element;
+  if (scalar @ga_keys == 1) {
+    $ga_element = $ga_self->{PROJECT}{contents}{$ga_keys[0]};
+
+  }
+  else {
+    my $ga_sublist = $ga_self->{PROJECT}{contents}{$ga_keys[0]};
+    $ga_element    = $ga_sublist->{contents}{$ga_keys[1]};
+  }
+
+  if (ref($ga_element) eq '') {
+    $ga_out->{status} = $ga_element;
+  }
+  else {
+    if (exists $ga_element->{status}) {
+      $ga_out->{status} = $ga_element->{status};
+    }
+    else {
+      $ga_out->{status} = $ga_self->{SETTINGS}{DEFAULT_STATUS};
+    }
+
+    if (exists $ga_element->{priority}) {
+      $ga_out->{priority} = $ga_element->{priority};
+    }
+
+    if (exists $ga_element->{description}) {
+      $ga_out->{description} = $ga_element->{description};
+    }
+  }
+
+  return $ga_out;
+}
+
 # create an item or maybe change an existing one
 sub Add_Element {
   my ($ae_self, $ae_args) = @_;
