@@ -71,7 +71,7 @@ sub has_element {
     if (exists $he_self->{PROJECT}{contents}{$he_keys[0]}) {
       my $he_sublist = $he_self->{PROJECT}{contents}{$he_keys[0]};
 
-      if (isa_list($he_sublist)
+      if ($he_self->isa_list($he_sublist)
         && exists $he_sublist->{contents}{$he_keys[1]}) {
       
         return 1;
@@ -84,7 +84,7 @@ sub has_element {
 
 # is scalar a todo list?
 sub isa_list {
-  my ($val) = @_;
+  my ($self, $val) = @_;
 
   return (ref($val) eq 'HASH' && exists $val->{contents}
     && ref($val->{contents}) eq 'HASH');
@@ -172,7 +172,7 @@ sub apply_to_matches {
     my $atm_count   = 0;
     my $atm_sublist = $atm_self->{PROJECT}{contents}{ $atm_key->[0] };
 
-    if (isa_list($atm_sublist)) {
+    if ($atm_self->isa_list($atm_sublist)) {
       foreach (@{ $atm_key->[1] }) {
         if ($atm_self->has_element($atm_key->[0], $_)) {
           &{ $atm_sub }($atm_sublist, $atm_self->{SETTINGS}, $_);
@@ -195,7 +195,7 @@ sub apply_to_matches {
 sub Edit_Element {
   my ($ee_self, $ee_args) = @_;
   
-  unless (isa_list($ee_self->{PROJECT})) {
+  unless ($ee_self->isa_list($ee_self->{PROJECT})) {
     die('error: no todo list to work on');
   }
 
@@ -247,7 +247,8 @@ sub _ee_set_attrs {
 sub Show_Element {
   my ($se_self, $se_args) = @_;
 
-  die('error: nothing to show') unless (isa_list($se_self->{PROJECT}));
+  die('error: nothing to show')
+    unless ($se_self->isa_list($se_self->{PROJECT}));
 
   if (scalar @$se_args) {
     foreach (@$se_args) {
@@ -275,7 +276,9 @@ sub _se_dumper {
     # print each item, excluding sublists, if it has the right status
     # apply the same rule to the ITEMS of a sublist
     while ((my ($k, $v) = each %{ $project->{contents} })) {
-      if (isa_list($v)) {
+      if (ref($v) eq 'HASH' && exists $v->{contents}
+        && ref($v->{contents}) eq 'HASH') {
+        
         _se_dumper($project, $settings, $k);
       }
       elsif (_has_the_status(
@@ -298,7 +301,8 @@ sub _se_dumper {
   else {
     my $sublist = $project->{contents}{$key};
 
-    return unless isa_list($sublist);
+    return unless (ref($sublist) eq 'HASH' && exists $sublist->{contents}
+                    && ref($sublist->{contents}) eq 'HASH');
 
     while ((my ($k, $v) = each %{ $sublist->{contents} })) {
       if (_has_the_status(
@@ -337,7 +341,8 @@ sub _se_dumper {
 sub Delete_Element {
   my ($de_self, $de_args) = @_;
 
-  die('error: nothing to delete') unless isa_list($de_self->{PROJECT});
+  die('error: nothing to delete')
+    unless $de_self->isa_list($de_self->{PROJECT});
 
   my $de_contents = $de_self->{PROJECT}{contents};
   if (scalar @$de_args) {
@@ -355,7 +360,7 @@ sub Delete_Element {
 
         delete $de_contents->{$key};
       }
-      elsif (isa_list($de_contents->{$key})) {
+      elsif ($de_self->isa_list($de_contents->{$key})) {
         while ((my ($subkey, $subvalue) = each %{ $de_contents->{$key}{contents} })) {
           _de_deleter($de_contents->{$key}, $de_self->{SETTINGS}, $subkey);
         }
