@@ -262,7 +262,7 @@ sub _ae_mover {
 
 # call a function on all relevant items
 sub apply_to_matches {
-  my ($atm_self, $atm_sub, $atm_key, $atm_is_list_op) = @_;
+  my ($atm_self, $atm_sub, $atm_key) = @_;
 
   if (ref($atm_key) eq 'ARRAY') {
     return 0 unless $atm_self->has_element($atm_key->[0]);
@@ -325,33 +325,32 @@ sub Edit_Element {
 
 # passed to apply_to_matches by edit_element to change items
 sub _ee_set_attrs {
-  my ($list, $settings, $key) = @_;
+  my ($self, @keys) = @_;
 
-  my $contents = $list->{contents};
-
-  return if ($settings->{STATUS_OPT} eq '' 
-          && $settings->{PRIORITY_OPT} eq ''
-          && $settings->{DESCRIPTION_OPT} eq '');
+  # return if the user did not provide values for *_OPT vars
+  return if ($self->{STATUS_OPT} eq '' 
+          && $self->{PRIORITY_OPT} eq ''
+          && $self->{DESCRIPTION_OPT} eq '');
 
   my $replacement = {};
 
-  if (ref($contents->{$key}) eq 'HASH') {
-    $replacement = $contents->{$key};
+  if (ref($self->get_element(@keys)) eq 'HASH') {
+    $replacement = $self->get_element(@keys);
   }
   
-  if ($settings->{STATUS_OPT} ne '') {
-    $replacement->{status} = $settings->{STATUS_OPT};
+  if ($self->{STATUS_OPT} ne '') {
+    $replacement->{status} = $self->{STATUS_OPT};
   }
 
-  if ($settings->{PRIORITY_OPT} ne '') {
-    $replacement->{priority} = $settings->{PRIORITY_OPT};
+  if ($self->{PRIORITY_OPT} ne '') {
+    $replacement->{priority} = $self->{PRIORITY_OPT};
   }
 
-  if ($settings->{DESCRIPTION_OPT} ne '') {
-    $replacement->{description} = $settings->{DESCRIPTION_OPT};
+  if ($self->{DESCRIPTION_OPT} ne '') {
+    $replacement->{description} = $self->{DESCRIPTION_OPT};
   }
 
-  $contents->{$key} = $replacement;
+  $self->set_element($element, @keys);
 }
 
 # print information about items in list
@@ -378,29 +377,27 @@ sub Show_Element {
 
 # print contents of 'list' if items have the right status
 sub _se_dumper {
-  my ($project, $settings, $key) = @_;
+  my ($self, @keys) = @_;
 
   my $has_printed_key = 0;
-  $has_printed_key    = 1 if $key eq '';
+  $has_printed_key    = 1 if $keys[0] eq '';
 
-  if ($key eq '') {
+  if ($keys[0] eq '') {
     # print each item, excluding sublists, if it has the right status
     # apply the same rule to the ITEMS of a sublist
-    while ((my ($k, $v) = each %{ $project->{contents} })) {
-      if (ref($v) eq 'HASH' && exists $v->{contents}
-        && ref($v->{contents}) eq 'HASH') {
-        
-        _se_dumper($project, $settings, $k);
+    while ((my ($k, $v) = each %{ $self->{PROJECT} })) {
+      if ($self->isa_list($v)) {
+        _se_dumper($self, $k);
       }
       elsif (_has_the_status(
                 $v,
-                $settings->{STATUS},
-                $settings->{STATUS},
-                $settings->{DEFAULT_STATUS})) {
+                $self->{STATUS},
+                $self->{STATUS},
+                $self->{DEFAULT_STATUS})) {
 
         print $k;
 
-        if ($settings->{VERBOSE} == 1) {
+        if ($self->{VERBOSE} == 1) {
           if (ref($v) eq 'HASH' && exists $v->{description}) {
             print " ($v->{description})";
           }
@@ -410,22 +407,21 @@ sub _se_dumper {
     }
   }
   else {
-    my $sublist = $project->{contents}{$key};
+    my $sublist = $self->get_element(@keys);
 
-    return unless (ref($sublist) eq 'HASH' && exists $sublist->{contents}
-                    && ref($sublist->{contents}) eq 'HASH');
+    return unless ($self->isa_list($sublist));
 
     while ((my ($k, $v) = each %{ $sublist->{contents} })) {
       if (_has_the_status(
               $v,
-              $settings->{STATUS},
-              $settings->{STATUS},
-              $settings->{DEFAULT_STATUS})) {
+              $self->{STATUS},
+              $self->{STATUS},
+              $self->{DEFAULT_STATUS})) {
 
         unless ($has_printed_key) {
-          print $key, ':';
+          print $keys[0], ':';
 
-          if ($settings->{VERBOSE} == 1
+          if ($self->{VERBOSE} == 1
             && exists $sublist->{description}) {
             
             print " ($sublist->{description}";
@@ -437,7 +433,7 @@ sub _se_dumper {
 
         print '  ', $k;
 
-        if ($settings->{VERBOSE} == 1) {
+        if ($self->{VERBOSE} == 1) {
           if (ref($v) eq 'HASH' && exists $v->{description}) {
             print " ($v->{description})";
           }
@@ -474,37 +470,36 @@ sub Delete_Element {
 
 # passed to apply_to_matches by delete_element to remove an item
 sub _de_deleter {
-  my ($project, $settings, $key, $is_list_op) = @_;
+  my ($self, @keys) = @_;
 
+  # we know we are operating on a sublist
   if (defined $is_list_op
     && _has_the_status(
-          $project->{contents}{$key},
-          $settings->{STATUS},
-          $settings->{STATUS},
-          $settings->{DEFAULT_STATUS})) {
+          $self->get_element(@keys),
+          $self->{STATUS},
+          $self->{STATUS},
+          $self->{DEFAULT_STATUS})) {
     
-    unless (keys %{ $project->{$key}{contents} }) {
-      delete $project->{contents}{$key};
+    unless (keys %{ $self->contents($keys[0]) }) {
+      delete $self->{PROJECT}{$keys[0]};
     }
   }
+  # @keys may or may not point to a sublist
   else {
     if (_has_the_status(
-          $project->{contents}{$key},
-          $settings->{STATUS},
-          $settings->{STATUS},
-          $settings->{DEFAULT_STATUS})) {
+          $self->get_element(@keys),
+          $self->{STATUS},
+          $self->{STATUS},
+          $self->{DEFAULT_STATUS})) {
 
-      if (ref $project->{contents}{$key} eq 'HASH'
-        && exists $project->{contents}{$key}{contents}) {
-
-        my $contents = $project->{contents}{$key}{contents};
-
-        foreach (keys %$contents) {
-          _de_deleter($project->{contents}{$key}, $settings, $_);
+      my $elem = $self->get_element(@keys);
+      if ($self->isa_list($elem)) {
+        foreach (keys %{ $elem->{contents} }) {
+          _de_deleter($self, $keys[0], $_);
         }
       }
       else {
-        delete $project->{contents}{$key};
+        delete $self->{PROJECT}{$keys[0]};
       }
     }
   }
