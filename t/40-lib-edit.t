@@ -40,18 +40,22 @@ my $conf = {
 
 my $todos = Devel::Todo->new($file, $conf);
 
-ok($todos->{PROJECT}{contents}{eat}{status} eq 'do', 'status initially do');
+my $attrs1 = $todos->get_attributes('eat');
 
-ok(!defined($todos->{PROJECT}{contents}{eat}{priority}), 'priority not defined');
+ok($attrs1->{status} eq 'do', 'status initially do');
 
-ok(!defined($todos->{PROJECT}{contents}{eat}{description}), 'description not defined');
+ok(!defined($attrs1->{priority}), 'priority not defined');
+
+ok(!defined($attrs1->{description}), 'description not defined');
 
 $todos->Edit_Element(['eat']);
 
-ok($todos->{PROJECT}{contents}{eat}{status} eq 'do', 'status still do');
+my $attrs2 = $todos->get_attributes('eat');
 
-ok($todos->{PROJECT}{contents}{eat}{priority} == 1, 'edit priority of eating to 0');
+is($attrs2->{status}, 'do', 'status still do');
 
-ok($todos->{PROJECT}{contents}{eat}{description} eq 'good food', 'edit description of eating');
+is($attrs2->{priority}, 1, 'edit priority of eating to 0');
+
+is($attrs2->{description}, 'good food', 'edit description of eating');
 
 done_testing();
