@@ -18,9 +18,12 @@ our $VERSION = '0.006001';
 sub new {
   my ($n_class, $n_todo_file, $n_config) = @_;
 
+  my $n_yaml = LoadFile($n_todo_file);
+
   my $n_self = {
     TODO_FILE => $n_todo_file,
-    PROJECT   => LoadFile($n_todo_file),
+    NAME      => $n_yaml->{name} || '',
+    PROJECT   => $n_yaml->{contents} || die "no project",
     SETTINGS  => {
       STATUS              => ($n_config->{STATUS}
           || die "no status given"),
@@ -74,7 +77,7 @@ sub contents {
   my ($l_self, $l_key) = @_;
 
   if (defined $l_key && $l_self->has_element($l_key)) {
-    my $l_element = $l_self->{PROJECT}{contents}{$l_key};
+    my $l_element = $l_self->{PROJECT}{$l_key};
 
     if ($l_self->isa_list($l_element)) {
       return $l_element->{contents};
@@ -84,7 +87,7 @@ sub contents {
     }
   }
   else {
-    return $l_self->{PROJECT}{contents};
+    return $l_self->{PROJECT};
   }
 }
 
@@ -103,7 +106,10 @@ sub get_element {
 
 # save the project to a file
 sub save_project {
-  DumpFile($_[0]->{TODO_FILE}, $_[0]->{PROJECT});
+  DumpFile($_[0]->{TODO_FILE}, { 
+      name => $_[0]->{name},
+      contents => $_[0]->{PROJECT}
+    });
 }
 
 # does todo list have item named after key?
@@ -113,11 +119,11 @@ sub has_element {
   return 0 unless @he_keys;
 
   if (scalar @he_keys == 1) {
-    return (exists $he_self->{PROJECT}{contents}{$he_keys[0]});
+    return (exists $he_self->{PROJECT}{$he_keys[0]});
   }
   else {
-    if (exists $he_self->{PROJECT}{contents}{$he_keys[0]}) {
-      my $he_sublist = $he_self->{PROJECT}{contents}{$he_keys[0]};
+    if (exists $he_self->{PROJECT}{$he_keys[0]}) {
+      my $he_sublist = $he_self->{PROJECT}{$he_keys[0]};
 
       if ($he_self->isa_list($he_sublist)
         && exists $he_sublist->{contents}{$he_keys[1]}) {
@@ -153,15 +159,7 @@ sub get_attributes {
   return {} unless (@ga_keys && $ga_self->has_element(@ga_keys));
 
   my $ga_out = {};
-  my $ga_element;
-  if (scalar @ga_keys == 1) {
-    $ga_element = $ga_self->{PROJECT}{contents}{$ga_keys[0]};
-
-  }
-  else {
-    my $ga_sublist = $ga_self->{PROJECT}{contents}{$ga_keys[0]};
-    $ga_element    = $ga_sublist->{contents}{$ga_keys[1]};
-  }
+  my $ga_element = $ga_self->get_element(@ga_keys);
 
   if (ref($ga_element) eq '') {
     $ga_out->{status} = $ga_element;
@@ -195,25 +193,25 @@ sub Add_Element {
   }
 
   # construct a new list item
-  my $ae_item = {};
+  my $ae_elem = {};
   if ($ae_self->{SETTINGS}{PRIORITY_OPT} eq ''
     && $ae_self->{SETTINGS}{DESCRIPTION_OPT} eq '') {
     
     if ($ae_self->{SETTINGS}{STATUS_OPT} eq '') {
-      $ae_item = $ae_self->{SETTINGS}{DEFAULT_STATUS};
+      $ae_elem = $ae_self->{SETTINGS}{DEFAULT_STATUS};
     }
     else {
-      $ae_item = $ae_self->{SETTINGS}{STATUS_OPT};
+      $ae_elem = $ae_self->{SETTINGS}{STATUS_OPT};
     }
   }
   elsif ($ae_self->{SETTINGS}{PRIORITY_OPT} eq '') {
-    $ae_item->{description} = $ae_self->{SETTINGS}{DESCRIPTION_OPT};
+    $ae_elem->{description} = $ae_self->{SETTINGS}{DESCRIPTION_OPT};
   }
   elsif ($ae_self->{SETTINGS}{DESCRIPTION_OPT} eq '') {
-    $ae_item->{priority} = $ae_self->{SETTINGS}{PRIORITY_OPT};
+    $ae_elem->{priority} = $ae_self->{SETTINGS}{PRIORITY_OPT};
   }
   elsif ($ae_self->{SETTINGS}{STATUS_OPT} ne '') {
-    $ae_item->{status} = $ae_self->{SETTINGS}{STATUS_OPT};
+    $ae_elem->{status} = $ae_self->{SETTINGS}{STATUS_OPT};
   }
 
   foreach (@$ae_args) {
@@ -223,21 +221,21 @@ sub Add_Element {
       next;
     }
     elsif (ref($_) eq 'ARRAY') {
-      unless (defined $ae_self->{PROJECT}{contents}{ $_->[0] }) {
-        $ae_self->{PROJECT}{contents}{ $_->[0] } = {
-          contents => {}
+      unless ($ae_self->has_element($_->[0])) {
+        $ae_self->{PROJECT}{ $_->[0] } = {
+              contents => {}
         };
       }
 
-      my $ae_sublist = $ae_self->{PROJECT}{contents}{ $_->[0] };
+      my $ae_sublist = $ae_self->get_element($_->[0]);
       
       # make several items with identical attributes in a sublist
-      for my $ae_item_name (@{ $_->[1] }) {
-        $ae_sublist->{contents}{$ae_item_name} = $ae_item;
+      for my $ae_name (@{ $_->[1] }) {
+        $ae_sublist->{contents}{$ae_name} = $ae_elem;
       }
     }
     else {
-      $ae_self->{PROJECT}{contents}{$_} = $ae_item;
+      $ae_self->{PROJECT}{$_} = $ae_elem;
     }
   }
 
@@ -266,7 +264,7 @@ sub apply_to_matches {
     return 0 unless $atm_self->has_element($atm_key->[0]);
 
     my $atm_count   = 0;
-    my $atm_sublist = $atm_self->{PROJECT}{contents}{ $atm_key->[0] };
+    my $atm_sublist = $atm_self->get_element($atm_key->[0]);
 
     if ($atm_self->isa_list($atm_sublist)) {
       foreach (@{ $atm_key->[1] }) {
@@ -455,7 +453,7 @@ sub Delete_Element {
   die('error: nothing to delete')
     unless $de_self->isa_list($de_self->{PROJECT});
 
-  my $de_contents = $de_self->{PROJECT}{contents};
+  my $de_contents = $de_self->{PROJECT};
   if (scalar @$de_args) {
     foreach (@$de_args) {
       $de_self->apply_to_matches(\&_de_deleter, $_);
