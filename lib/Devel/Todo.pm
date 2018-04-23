@@ -87,11 +87,25 @@ sub get_element {
   return {} unless $ge_self->has_element(@ge_keys);
 
   if (scalar @ge_keys == 1) {
-    return $ge_self->contents()->{$ge_keys[0]};
+    return $ge_self->{PROJECT}{$ge_keys[0]};
   }
   else {
     return $ge_self->contents($ge_keys[0])->{$ge_keys[1]};
   }
+}
+
+sub set_element {
+  my ($self, $element, @keys) = @_;
+
+  return unless $ge_self->has_element(@ge_keys);
+
+  if (scalar @ge_keys == 1) {
+    $ge_self->{PROJECT}{$ge_keys[0]} = $element;
+  }
+  else {
+    $ge_self->contents($ge_keys[0])->{$ge_keys[1]} = $element;
+  }
+
 }
 
 # save the project to a file
@@ -236,13 +250,13 @@ sub Add_Element {
 
 # passed to apply_to_matches by add_element to move an item
 sub _ae_mover {
-  my ($project, $settings, $key) = @_;
+  my ($self, @keys) = @_;
 
-  if (ref($project->{contents}{$key}) eq 'HASH') {
-    $project->{contents}{$key}{status} = $settings->{STATUS};
+  if (ref($self->get_element(@keys)) eq 'HASH') {
+    $self->get_element(@keys)->{status} = $self->{STATUS};
   }
   else {
-    $project->{contents}{$key} = $settings->{STATUS};
+    $self->set_element($self->{STATUS}, @keys);
   }
 }
 
