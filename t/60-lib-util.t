@@ -52,7 +52,7 @@ ok($todos->has_element('code', 'doc'), 'sublist code has element doc');
 ok(!$todos->has_element('code', 'test'), 'sublist code does not have element test');
 
 sub write_uc {
-  print uc($_[2]), "\n";
+  print uc($_[1]), "\n";
 }
 
 sub test1 {

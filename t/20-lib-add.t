@@ -38,15 +38,15 @@ my $conf = {
 my $todos = Devel::Todo->new($file, $conf);
 
 $todos->Add_Element(['code']);
-$todos->Add_Element(['test Devel::Todo', 'install Devel::Todo']);
-$todos->Add_Element([ ['app', ['preview doc'] ] ]);
 
 ok($todos->has_element('code'), 'add code to todo list');
 
+$todos->Add_Element(['test Devel::Todo', 'install Devel::Todo']);
 ok($todos->has_element('test Devel::Todo')
   && $todos->has_element('install Devel::Todo'),
   'add two items at once to todo list');
 
+$todos->Add_Element([ ['app', ['preview doc'] ] ]);
 ok($todos->has_element('app', 'preview doc'),
   'create sublist with one element');
 

@@ -17,10 +17,10 @@ close $fh;
 my $yaml = {
   name     => 'today',
   contents => {
-    'eat'   => {
+    eat   => {
       status => 'do'
     },
-    'sleep' => 'want',
+    sleep => 'want',
   },
 };
 
