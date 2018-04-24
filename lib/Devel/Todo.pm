@@ -10,7 +10,7 @@ use warnings;
 
 use feature qw/say/;
 
-use YAML::XS qw/LoadFile DumpFile/;
+use YAML::XS qw/LoadFile DumpFile Dump/;
 
 our $VERSION = '0.006001';
 
@@ -22,11 +22,10 @@ sub new {
 
   my $n_self = {
     TODO_FILE => $n_todo_file,
-    NAME      => $n_yaml->{name} || '',
-    PROJECT   => $n_yaml->{contents} || die "no project",
-    STATUS              => ($n_config->{STATUS}
-          || die "no status given"),
-    DEFAULT_STATUS      => ($n_config->{DEFAULT_STATUS}
+    NAME      => ($n_yaml->{name} || ''),
+    PROJECT   => ($n_yaml->{contents} || die "no project"),
+    STATUS    => ($n_config->{STATUS} || die "no status given"),
+    DEFAULT_STATUS => ($n_config->{DEFAULT_STATUS}
           || die "no default status given"),
     DEFAULT_PRIORITY    => $n_config->{DEFAULT_PRIORITY} || 0,
     DEFAULT_DESCRIPTION => $n_config->{DEFAULT_DESCRIPTION} || '',
@@ -95,15 +94,15 @@ sub get_element {
 }
 
 sub set_element {
-  my ($self, $element, @keys) = @_;
+  my ($se0_self, $se0_element, @se0_keys) = @_;
 
-  return unless $ge_self->has_element(@ge_keys);
+  return unless $se0_self->has_element(@se0_keys);
 
-  if (scalar @ge_keys == 1) {
-    $ge_self->{PROJECT}{$ge_keys[0]} = $element;
+  if (scalar @se0_keys == 1) {
+    $se0_self->{PROJECT}{$se0_keys[0]} = $se0_element;
   }
   else {
-    $ge_self->contents($ge_keys[0])->{$ge_keys[1]} = $element;
+    $se0_self->contents($se0_keys[0])->{$se0_keys[1]} = $se0_element;
   }
 
 }
@@ -153,7 +152,7 @@ sub is_empty_list {
   my ($iel_self, $iel_val) = @_;
 
   return ($iel_self->isa_list($iel_val)
-    && scalar keys %{ $iel_val->{contents} });
+    && !(scalar keys %{ $iel_val->{contents} }));
 }
 
 # get a hash reference to a copy of an element's attributes
@@ -273,13 +272,9 @@ sub apply_to_matches {
     if ($atm_self->isa_list($atm_sublist)) {
       foreach (@{ $atm_key->[1] }) {
         if ($atm_self->has_element($atm_key->[0], $_)) {
-          &{ $atm_sub }($atm_self, $_);
-        }
+          &{ $atm_sub }($atm_self, $atm_key->[0], $_);
 
-        if (defined $atm_is_list_op) {
-          &{ $atm_sub }($atm_self,
-                        $atm_key->[0],
-                        $atm_is_list_op);
+          $atm_count++;
         }
       }
 
@@ -289,13 +284,6 @@ sub apply_to_matches {
   elsif ($atm_self->has_element($atm_key)) {
     &{ $atm_sub }($atm_self, $atm_key);
     
-    if (defined $atm_is_list_op) {
-      &{ $atm_sub }(
-          $atm_self,
-          $atm_key,
-          $atm_is_list_op);
-    }
-
     return 1;
   }
 
@@ -306,10 +294,6 @@ sub apply_to_matches {
 sub Edit_Element {
   my ($ee_self, $ee_args) = @_;
   
-  unless ($ee_self->isa_list($ee_self->{PROJECT})) {
-    die('error: no todo list to work on');
-  }
-
   if ($ee_self->{STATUS} eq 'all') {
     die("error: cannot edit with \'all\' status");
   }
@@ -350,33 +334,30 @@ sub _ee_set_attrs {
     $replacement->{description} = $self->{DESCRIPTION_OPT};
   }
 
-  $self->set_element($element, @keys);
+  $self->set_element($replacement, @keys);
 }
 
 # print information about items in list
 sub Show_Element {
-  my ($se_self, $se_args) = @_;
+  my ($se1_self, $se1_args) = @_;
 
-  die('error: nothing to show')
-    unless ($se_self->isa_list($se_self->{PROJECT}));
-
-  if (scalar @$se_args) {
-    foreach (@$se_args) {
+  if (scalar @$se1_args) {
+    foreach (@$se1_args) {
       # ignore arrayref args
       if (ref($_) eq '') {
-        $se_self->apply_to_matches(\&_se_dumper, $_);
+        $se1_self->apply_to_matches(\&_se1_dumper, $_);
       }
     }
   }
   else {
-    _se_dumper($atm_self, '');
+    _se1_dumper($se1_self, '');
   }
 
   return 0;
 }
 
 # print contents of 'list' if items have the right status
-sub _se_dumper {
+sub _se1_dumper {
   my ($self, @keys) = @_;
 
   my $has_printed_key = 0;
@@ -387,9 +368,9 @@ sub _se_dumper {
     # apply the same rule to the ITEMS of a sublist
     while ((my ($k, $v) = each %{ $self->{PROJECT} })) {
       if ($self->isa_list($v)) {
-        _se_dumper($self, $k);
+        _se1_dumper($self, $k);
       }
-      elsif ($self->has_the_status($v, $self->{STATUS})) {
+      elsif ($self->has_status($v, $self->{STATUS})) {
         print $k;
 
         if ($self->{VERBOSE} == 1) {
@@ -407,7 +388,7 @@ sub _se_dumper {
     return unless ($self->isa_list($sublist));
 
     while ((my ($k, $v) = each %{ $sublist->{contents} })) {
-      if ($self->has_the_status($v, $self->{STATUS})) {
+      if ($self->has_status($v, $self->{STATUS})) {
 
         unless ($has_printed_key) {
           print $keys[0], ':';
@@ -439,9 +420,6 @@ sub _se_dumper {
 sub Delete_Element {
   my ($de_self, $de_args) = @_;
 
-  die('error: nothing to delete')
-    unless $de_self->isa_list($de_self->{PROJECT});
-
   my $de_contents = $de_self->{PROJECT};
   if (scalar @$de_args) {
     foreach (@$de_args) {
@@ -463,24 +441,39 @@ sub Delete_Element {
 sub _de_deleter {
   my ($self, @keys) = @_;
 
-  # we know we are operating on a sublist
-  if ($self->has_status($self->get_element(@keys), $self->{STATUS})) {
-    unless (keys %{ $self->contents($keys[0]) }) {
-      delete $self->{PROJECT}{$keys[0]};
+  my $elem = $self->get_element(@keys);
+  # if an element of sublist, delete it if it has the current status
+  # and then delete the sublist if it is empty
+  if (scalar @keys > 1) {
+    if ($self->has_status($elem, $self->{STATUS})) {
+      delete $self->{PROJECT}{ $keys[0] }{contents}{ $keys[1] };
+    }
+
+    # an empty sublist is removed regardless of its explicit status
+    if ($self->is_empty_list($elem)) {
+      delete $self->{PROJECT}{ $keys[0] };
     }
   }
-  # @keys may or may not point to a sublist
+
+  # if a sublist, attempt to delete the elements of it and
+  # then delete the sublist if it is empty
+  elsif ($self->isa_list($elem)) {
+    foreach (keys %{ $elem->{contents} }) {
+      if ($self->has_status($elem->{contents}{$_}, $self->{STATUS})) {
+        delete $elem->{contents}{$_};
+      }
+    }
+
+    # an empty sublist is removed regardless of its explicit status
+    if ($self->is_empty_list($elem)) {
+      delete $self->{PROJECT}{ $keys[0] };
+    }
+  }
+
+  # otherwise, delete the element if it has the current status
   else {
-    if ($self->has_status($self->get_element(@keys), $self->{STATUS})) {
-      my $elem = $self->get_element(@keys);
-      if ($self->isa_list($elem)) {
-        foreach (keys %{ $elem->{contents} }) {
-          _de_deleter($self, $keys[0], $_);
-        }
-      }
-      else {
-        delete $self->{PROJECT}{$keys[0]};
-      }
+    if ($self->has_status($elem, $self->{STATUS})) {
+      delete $self->{PROJECT}{ $keys[0] };
     }
   }
 }
