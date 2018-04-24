@@ -10,7 +10,7 @@ use warnings;
 
 use feature qw/say/;
 
-use YAML::XS qw/LoadFile DumpFile Dump/;
+use YAML::XS qw/LoadFile DumpFile/;
 
 our $VERSION = '0.006001';
 
@@ -569,7 +569,7 @@ let's illustrate with an example:
 
 $args = [
   'eat',
-  ['code', 'Devel::Todo']
+  ['code', ['Devel::Todo']]
 ]
 
 the Delete_Element method mentioned above will process $args by
@@ -670,11 +670,9 @@ which is basically one element of the $args taken by Add_Element,
 and runs the code on each affected element. you can use this method
 to create your own custom drivers (and in fact Add_Element et al. are
 all of them implemented on top of this method). to make this possible,
-the sub must be prepared to take three arguments: 1) a hash reference
-that points to the start of the list or the current sublist, 2) the
-project settings, which have the same keys defined in $config passed
-to new, 3) the string name of the element in the list or sublist. the
-start of the list is the Entire YAML document.
+the sub must be prepared to take two arguments: 1) a copy of $self, and
+2) a list of keys (either 1 or 2) that specifies the location of the
+affected element.
 
 =item has_element($name [, $subname])
 
@@ -690,6 +688,38 @@ specify its status, the default status is assumed. if the
 arguments to get_attributes specify an element that does not exist,
 the function returns an empty hash. NOTE: if an attribute is
 not defined, no value for it will exist in the hash.
+
+=item has_status($element, $status)
+
+predicate. convenience method to test the status of an element 
+in the YAML object. $element is the literal element, not its
+name.
+
+=item get_element(@keys)
+
+retrieve the literal element specified by @keys. this will return
+either a hash reference or a string, depending on the value of the
+element. if the element does not exist, returns {}.
+
+=item set_element($element, @keys)
+
+sets the value of the element in the YAML object specified by @keys
+to $element. valid forms of $element are a string and a hash reference.
+other values will corrupt the YAML object and confuse Devel::Todo later.
+by definition, set_element autovivifies an element that does not exist
+and Replaces one that does exist.
+
+=item file()
+
+returns the path of the YAML project file
+
+=item contents($name)
+
+returns the contents hash reference of a sublist
+
+=item save_project()
+
+writes the current state of the project to the YAML file
 
 =back
 
