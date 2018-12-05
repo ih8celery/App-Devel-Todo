@@ -59,6 +59,10 @@ notice that both the parent todo list and its sublist 'other' have a
 _contents_ key. the contents key is required for a list to be
 recognized.
 
+looks for a user level configuration file called $HOME/.todorc.yml
+
+a project is described in a local file called .todos
+
 # Subcommands
 
 before you ask, the subcommands are not in fact "commands"; the actual
