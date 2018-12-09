@@ -1,32 +1,9 @@
-#! /usr/bin/env perl
-# file: App/Devel/Todo.pm
-# author: Adam Marshall (ih8celery)
-# brief: define the command-line app's essential functions
+#!/usr/bin/env perl
 
-package App::Devel::Todo;
+package App::TaskManager;
 
-use strict;
-use warnings;
-
-use feature qw/say/;
-
-BEGIN {
-  use Exporter;
-
-  our @ISA         = qw/Exporter/;
-  our @EXPORT      = qw/&Run/;
-  our @EXPORT_OK   = qw{&find_project_file
-                        &process_args
-                        &get_possible_subcommand
-                        &configure_app
-                        &Run};
-  our %EXPORT_TAGS = (
-    tests => ['&find_project_file',
-              '&process_args',
-              '&get_possible_subcommand',
-              '&configure_app'],
-  );
-}
+use Mouse;
+extends qw/CLI::CommandLineApp/;
 
 use File::Spec::Functions qw/catfile/;
 use Getopt::Long qw/:config no_ignore_case/;
